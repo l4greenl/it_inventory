@@ -1,3 +1,5 @@
+// привет
+
 // frontend/src/components/Directory.js
 import React, { useState, useEffect } from 'react';
 import {
