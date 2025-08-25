@@ -68,13 +68,12 @@ const AssetList = ({ currentUser }) => {
 
   // <<<--- НОВОЕ: Функция для форматирования ФИО
   const formatEmployeeName = useCallback((fullName) => {
-    if (!fullName) return 'Не указано';
+    if (!fullName) return '';
     const parts = fullName.trim().split(/\s+/);
-    if (parts.length === 0) return 'Не указано';
+    if (parts.length === 0) return '';
     if (parts.length === 1) return parts[0];
-    // Фамилия И.О.
     return `${parts[0]} ${parts.slice(1).map(part => part.charAt(0).toUpperCase() + '.').join('')}`.trim();
-  }, []); // Не зависит от внешних переменных
+  }, []);
 
   // <<<--- НОВОЕ: Обработчик beforeunload
   const handleBeforeUnload = useCallback((event) => {
@@ -98,21 +97,6 @@ const AssetList = ({ currentUser }) => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [selectedAssets, handleBeforeUnload]);
-
-  // <<<--- НОВОЕ: Обработчик перехода (для Prompt или ручной навигации)
-  // Это упрощённая версия. Для полноценного Prompt из RRv6 нужно больше настройки.
-  const handleNavigationAttempt = useCallback((to) => {
-    if (selectedAssets.length > 0 && !confirmedNavigation) {
-      // Предотвращаем автоматическую навигацию браузера
-      if (window.confirm("У вас есть выделенные активы. Вы уверены, что хотите покинуть страницу?")) {
-        setConfirmedNavigation(true);
-        // Откладываем навигацию на следующий тик, чтобы сначала обновилось состояние
-        setTimeout(() => navigate(to), 0);
-      }
-      return false; // Предотвращаем немедленный переход
-    }
-    return true; // Разрешаем переход
-  }, [selectedAssets, confirmedNavigation, navigate]);
 
   // Загрузка данных
   useEffect(() => {
@@ -152,23 +136,23 @@ const AssetList = ({ currentUser }) => {
   // Функции для получения имен по ID
   const getTypeName = useCallback((typeId) => {
     const type = types.find(t => t.id === typeId);
-    return type ? type.name : 'Не указано';
+    return type ? type.name : '';
   }, [types]); // Зависит только от types
 
   const getStatusName = useCallback((statusId) => {
     const status = statuses.find(s => s.id === statusId);
-    return status ? status.name : 'Не указано';
+    return status ? status.name : '';
   }, [statuses]); // Зависит только от statuses
 
   const getDepartmentName = useCallback((deptId) => {
     const dept = departments.find(d => d.id === deptId);
-    return dept ? dept.name : 'Не указано';
+    return dept ? dept.name : '';
   }, [departments]); // Зависит только от departments
 
   const getEmployeeName = useCallback((empId) => {
     const emp = employees.find(e => e.id === empId);
     // Используем форматирование ФИО
-    return emp ? formatEmployeeName(emp.name) : 'Не указано';
+    return emp ? formatEmployeeName(emp.name) : '';
   }, [employees]); // Зависит только от employees
 
   // Фильтрация и сортировка
@@ -215,13 +199,11 @@ const AssetList = ({ currentUser }) => {
               case 'OS':
                 fieldValue = asset.OS;
                 break;
-              // Убедитесь, что имя поля соответствует тому, как оно хранится в объекте asset
-              // Если в asset поле называется IP_address, используйте его
               case 'IP_address':
                 fieldValue = asset.IP_address;
                 break;
               case 'status_id':
-                fieldValue = asset.status_id ? getStatusName(asset.status_id) : null;
+                fieldValue = asset.status_id;
                 break;
               case 'actual_user':
                 fieldValue = asset.actual_user;
@@ -236,17 +218,12 @@ const AssetList = ({ currentUser }) => {
                 fieldValue = null;
             }
 
-            // Проверяем, что fieldValue существует и является строкой, прежде чем искать
             if (fieldValue != null && typeof fieldValue === 'string') {
               return fieldValue.toLowerCase().includes(term);
             }
-            // Если fieldValue - это число (например, для RAM в ГБ), преобразуем его в строку
             if (typeof fieldValue === 'number') {
                  return fieldValue.toString().includes(term); // Поиск подстроки в строковом представлении числа
             }
-            // Для status_id мы уже получили строку через getStatusName, если ID был валидным
-            // Если getStatusName вернул null или не строку, это не совпадение
-
             return false; // Если поле не подходит или не найдено совпадение
           });
         }
@@ -255,29 +232,25 @@ const AssetList = ({ currentUser }) => {
       });
     }
 
-    // Сортировка
-    // --- ИСПРАВЛЕНА СОРТИРОВКА ---
     result = [...result].sort((a, b) => {
       let aValue = a[sortColumn];
       let bValue = b[sortColumn];
 
-      // --- Безопасное преобразование в строку и приведение null/undefined ---
-      // Это ключевое изменение: всегда обеспечиваем, что aValue и bValue - строки
       const safeStringify = (val) => {
         if (val == null) return ''; // Преобразуем null/undefined в пустую строку
-        // Для объектов Date используем их строковое представление
         if (val instanceof Date) return val.toISOString();
-        // Для чисел и булевых значений преобразуем в строку
         return String(val);
       };
 
-      // --- Специальная обработка для определённых колонок ---
       if (sortColumn === 'type_id') {
         aValue = getTypeName(aValue) ?? ''; // Используем ?? для защиты
-        bValue = getStatusName(bValue) ?? '';
+        bValue = getTypeName(bValue) ?? '';
       } else if (sortColumn === 'status_id') {
         aValue = getStatusName(aValue) ?? '';
         bValue = getStatusName(bValue) ?? '';
+      } else if (sortColumn === 'actual_user') {
+        aValue = getEmployeeName(aValue) ?? '';
+        bValue = getEmployeeName(bValue) ?? '';
       } else if (sortColumn === 'department_id') {
         aValue = getDepartmentName(aValue) ?? '';
         bValue = getDepartmentName(bValue) ?? '';
@@ -285,27 +258,20 @@ const AssetList = ({ currentUser }) => {
         aValue = getEmployeeName(aValue) ?? '';
         bValue = getEmployeeName(bValue) ?? '';
       } else if (sortColumn === 'purchase_date') {
-        // Преобразуем в Date для корректного сравнения, null -> старая дата
         const dateA = aValue ? new Date(aValue) : new Date(0);
         const dateB = bValue ? new Date(bValue) : new Date(0);
-        // Сравнение дат
         if (dateA < dateB) return sortOrder === 'asc' ? -1 : 1;
         if (dateA > dateB) return sortOrder === 'asc' ? 1 : -1;
         return 0;
       }
-      // Для всех остальных полей, включая 'OS', 'CPU', 'brand', 'model' и т.д.
-      // просто преобразуем значения в строки безопасным способом
       else {
         aValue = safeStringify(aValue);
         bValue = safeStringify(bValue);
       }
 
-      // --- Теперь aValue и bValue гарантированно строки. Сравниваем. ---
-      // Приводим к нижнему регистру для регистронезависимой сортировки
       const aStr = aValue.toLowerCase();
       const bStr = bValue.toLowerCase();
 
-      // Общее лексикографическое сравнение строк
       if (aStr < bStr) {
         return sortOrder === 'asc' ? -1 : 1;
       }
@@ -314,7 +280,6 @@ const AssetList = ({ currentUser }) => {
       }
       return 0;
     });
-    // --- КОНЕЦ ИСПРАВЛЕНОЙ СОРТИРОВКИ ---
 
     setFilteredAssets(result);
     setPage(0); // Сбросить на первую страницу после фильтрации/сортировки
@@ -562,6 +527,8 @@ const AssetList = ({ currentUser }) => {
             row[columnDef.label] = getStatusName(asset.status_id);
           } else if (colKey === 'purchase_date' && asset.purchase_date) {
             row[columnDef.label] = new Date(asset.purchase_date).toLocaleDateString();
+          } else if (colKey === 'actual_user') {
+            row[columnDef.label] = getEmployeeName(asset.actual_user);
           } else {
             // Для остальных полей используем имя из JSON
             row[columnDef.label] = asset[colKey] || '';
@@ -667,349 +634,349 @@ const AssetList = ({ currentUser }) => {
 
   return (
     <Container maxWidth="xl" style={{ marginTop: '20px' }}>
-      {/* Стилизованный заголовок */}
-      <Typography variant="h5" gutterBottom style={{ textAlign: 'center', fontSize: '30px' }}>
-        <strong>Оборудование</strong>
-      </Typography>
-
-      {/* Поисковая строка */}
-      <TextField
-        label="Поиск"
-        variant="outlined"
-        fullWidth
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        style={{ marginBottom: '16px' }}
-      />
-    
-
-      {/* Кнопки действий под строкой поиска */}
-      <Box display="flex" gap={2} mb={2} flexWrap="wrap">
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={handleExportExcel}
-          disabled={selectedAssets.length === 0}
-        >
-          Печать Excel
-        </Button>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={handlePrintQRCode}
-          disabled={selectedAssets.length === 0}
-        >
-          Печать QR
-        </Button>
-        {currentUser && currentUser.role === 'admin' && (
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleDeleteSelected}
-            disabled={selectedAssets.length === 0}
-          >
-            Удалить
-          </Button>
-        )}
-        {currentUser && currentUser.role === 'admin' && (
-          <Button
-            variant="contained"
-            color="success"
-            onClick={() => {
-               if (selectedAssets.length > 0) {
-                 if (window.confirm("У вас есть выделенные активы. Вы уверены, что хотите покинуть страницу?")) {
-                   setSelectedAssets([]); // Очищаем выбор перед навигацией
-                   navigate('/assets/new');
-                 }
-               } else {
-                 navigate('/assets/new');
-               }
-            }}
-          >
-            Добавить
-          </Button>
-        )}
-      </Box>
-
-        <Typography variant="body2" color="textSecondary" align="left" gutterBottom>
-          Выделено: {selectedAssets.length}
+      <Paper elevation={3} style={{ padding: '20px', marginTop: '20px' }}>
+        <Typography variant="h5" gutterBottom style={{ textAlign: 'center', fontSize: '30px' }}>
+          <strong>Оборудование</strong>
         </Typography>
 
-      <TableContainer component={Paper}>
-        <Table>
-          {/* <<<--- ИЗМЕНЕНО: Заголовки таблицы с динамическими колонками */}
-          <TableHead>
-            <TableRow>
-              <TableCell padding="checkbox">
-                <Checkbox
-                  indeterminate={selectedAssets.length > 0 && selectedAssets.length < paginatedAssets.length}
-                  checked={isAllSelected}
-                  onChange={handleSelectAllClick}
-                />
-              </TableCell>
-              {/* Базовые колонки */}
-              <TableCell sx={{ fontWeight: 'bold' }}>
-                <TableSortLabel
-                  active={sortColumn === 'inventory_number'}
-                  direction={sortColumn === 'inventory_number' ? sortOrder : 'asc'}
-                  onClick={() => handleSort('inventory_number')}
-                  sx={{ fontWeight: 'bold' }}
-                >
-                  Инвентарный номер
-                </TableSortLabel>
-              </TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>
-                <TableSortLabel
-                  active={sortColumn === 'type_id'}
-                  direction={sortColumn === 'type_id' ? sortOrder : 'asc'}
-                  onClick={() => handleSort('type_id')}
-                  sx={{ fontWeight: 'bold' }}
-                >
-                  Наименование
-                </TableSortLabel>
-              </TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>
-                <TableSortLabel
-                  active={sortColumn === 'responsible_person'}
-                  direction={sortColumn === 'responsible_person' ? sortOrder : 'asc'}
-                  onClick={() => handleSort('responsible_person')}
-                  sx={{ fontWeight: 'bold' }}
-                >
-                  Ответственный
-                </TableSortLabel>
-              </TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>
-                <TableSortLabel
-                  active={sortColumn === 'department_id'}
-                  direction={sortColumn === 'department_id' ? sortOrder : 'asc'}
-                  onClick={() => handleSort('department_id')}
-                  sx={{ fontWeight: 'bold' }}
-                >
-                  Отдел
-                </TableSortLabel>
-              </TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>
-                <TableSortLabel
-                  active={sortColumn === 'room'}
-                  direction={sortColumn === 'room' ? sortOrder : 'asc'}
-                  onClick={() => handleSort('room')}
-                  sx={{ fontWeight: 'bold' }}
-                >
-                  Помещение
-                </TableSortLabel>
-              </TableCell>
-              {/* Кнопка "+" для добавления колонок */}
-              <TableCell sx={{ fontWeight: 'bold', width: '50px' }}>
-                <IconButton
-                  color="success" // Зелёная кнопка
-                  onClick={handleAddColumnClick}
-                  size="small"
-                  aria-label="Добавить колонку"
-                >
-                  <AddIcon />
-                </IconButton>
-                {/* Меню для выбора колонок */}
-                <Menu
-                  anchorEl={anchorEl}
-                  open={openMenu}
-                  onClose={handleAddColumnClose}
-                  anchorOrigin={{
-                    vertical: 'bottom',
-                    horizontal: 'center',
-                  }}
-                  transformOrigin={{
-                    vertical: 'top',
-                    horizontal: 'center',
-                  }}
-                >
-                  {availableExtraColumns
-                    .filter(col => !extraColumns.includes(col.key)) // Показываем только НЕдобавленные
-                    .map(col => (
-                      <MenuItem key={col.key} onClick={() => handleAddColumnSelect(col.key)}>
-                        {col.label}
-                      </MenuItem>
-                    ))}
-                  {availableExtraColumns.filter(col => !extraColumns.includes(col.key)).length === 0 && (
-                    <MenuItem disabled>Нет доступных колонок</MenuItem>
-                  )}
-                </Menu>
-              </TableCell>
-              {/* Динамические дополнительные колонки */}
-              {extraColumns.map(colKey => {
-                const columnDef = availableExtraColumns.find(col => col.key === colKey);
-                return (
-                  <TableCell key={colKey} sx={{ fontWeight: 'bold', position: 'relative' }}>
-                    <TableSortLabel
-                      active={sortColumn === colKey}
-                      direction={sortColumn === colKey ? sortOrder : 'asc'}
-                      onClick={() => handleSort(colKey)}
-                      sx={{ fontWeight: 'bold', paddingRight: '24px' }} // Отступ для крестика
-                    >
-                      {columnDef ? columnDef.label : colKey}
-                    </TableSortLabel>
-                    {/* Кнопка "крестик" для удаления колонки */}
-                    <IconButton
-                      size="small"
-                      onClick={() => handleRemoveExtraColumn(colKey)}
-                      sx={{
-                        position: 'absolute',
-                        top: '50%',
-                        right: 0,
-                        transform: 'translateY(-50%)',
-                        color: 'red', // Красный крестик
-                        opacity: 0, // Скрыто по умолчанию
-                        transition: 'opacity 0.2s',
-                        padding: '2px',
-                        '&:hover': {
-                          backgroundColor: 'rgba(255, 0, 0, 0.1)'
-                        }
-                      }}
-                      className="remove-column-button" // Для стилей наведения
-                    >
-                      <CloseIcon fontSize="small" />
-                    </IconButton>
-                  </TableCell>
-                );
-              })}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {paginatedAssets.length > 0 ? (
-              paginatedAssets.map((asset) => {
-                const isItemSelected = isSelected(asset.id);
-                return (
-                  <TableRow
-                    key={asset.id}
-                    hover
-                    onClick={(event) => {
-                      if (event.target.type !== 'checkbox') {
-                        // <<<--- ИЗМЕНЕНО: Проверка перед навигацией
-                        if (selectedAssets.length > 0) {
-                          if (window.confirm("У вас есть выделенные активы. Вы уверены, что хотите открыть карточку?")) {
+        {/* Поисковая строка */}
+        <TextField
+          label="Поиск"
+          variant="outlined"
+          fullWidth
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          style={{ marginBottom: '16px' }}
+        />
+      
+
+        {/* Кнопки действий под строкой поиска */}
+        <Box display="flex" gap={2} mb={2} flexWrap="wrap">
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleExportExcel}
+            disabled={selectedAssets.length === 0}
+          >
+            Печать Excel
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handlePrintQRCode}
+            disabled={selectedAssets.length === 0}
+          >
+            Печать QR
+          </Button>
+          {currentUser && currentUser.role === 'admin' && (
+            <Button
+              variant="contained"
+              color="error"
+              onClick={handleDeleteSelected}
+              disabled={selectedAssets.length === 0}
+            >
+              Удалить
+            </Button>
+          )}
+          {currentUser && currentUser.role === 'admin' && (
+            <Button
+              variant="contained"
+              color="success"
+              onClick={() => {
+                if (selectedAssets.length > 0) {
+                  if (window.confirm("У вас есть выделенные активы. Вы уверены, что хотите покинуть страницу?")) {
+                    setSelectedAssets([]); // Очищаем выбор перед навигацией
+                    navigate('/assets/new');
+                  }
+                } else {
+                  navigate('/assets/new');
+                }
+              }}
+            >
+              Добавить
+            </Button>
+          )}
+        </Box>
+
+          <Typography variant="body2" color="textSecondary" align="left" gutterBottom>
+            Выделено: {selectedAssets.length}
+          </Typography>
+
+        <TableContainer component={Paper}>
+          <Table>
+            {/* <<<--- ИЗМЕНЕНО: Заголовки таблицы с динамическими колонками */}
+            <TableHead>
+              <TableRow>
+                <TableCell padding="checkbox">
+                  <Checkbox
+                    indeterminate={selectedAssets.length > 0 && selectedAssets.length < paginatedAssets.length}
+                    checked={isAllSelected}
+                    onChange={handleSelectAllClick}
+                  />
+                </TableCell>
+                {/* Базовые колонки */}
+                <TableCell sx={{ fontWeight: 'bold' }}>
+                  <TableSortLabel
+                    active={sortColumn === 'inventory_number'}
+                    direction={sortColumn === 'inventory_number' ? sortOrder : 'asc'}
+                    onClick={() => handleSort('inventory_number')}
+                    sx={{ fontWeight: 'bold' }}
+                  >
+                    Инвентарный номер
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>
+                  <TableSortLabel
+                    active={sortColumn === 'type_id'}
+                    direction={sortColumn === 'type_id' ? sortOrder : 'asc'}
+                    onClick={() => handleSort('type_id')}
+                    sx={{ fontWeight: 'bold' }}
+                  >
+                    Наименование
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>
+                  <TableSortLabel
+                    active={sortColumn === 'responsible_person'}
+                    direction={sortColumn === 'responsible_person' ? sortOrder : 'asc'}
+                    onClick={() => handleSort('responsible_person')}
+                    sx={{ fontWeight: 'bold' }}
+                  >
+                    Ответственный
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>
+                  <TableSortLabel
+                    active={sortColumn === 'department_id'}
+                    direction={sortColumn === 'department_id' ? sortOrder : 'asc'}
+                    onClick={() => handleSort('department_id')}
+                    sx={{ fontWeight: 'bold' }}
+                  >
+                    Отдел
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>
+                  <TableSortLabel
+                    active={sortColumn === 'room'}
+                    direction={sortColumn === 'room' ? sortOrder : 'asc'}
+                    onClick={() => handleSort('room')}
+                    sx={{ fontWeight: 'bold' }}
+                  >
+                    Помещение
+                  </TableSortLabel>
+                </TableCell>
+                {/* Кнопка "+" для добавления колонок */}
+                <TableCell sx={{ fontWeight: 'bold', width: '50px' }}>
+                  <IconButton
+                    color="success" // Зелёная кнопка
+                    onClick={handleAddColumnClick}
+                    size="small"
+                    aria-label="Добавить колонку"
+                  >
+                    <AddIcon />
+                  </IconButton>
+                  {/* Меню для выбора колонок */}
+                  <Menu
+                    anchorEl={anchorEl}
+                    open={openMenu}
+                    onClose={handleAddColumnClose}
+                    anchorOrigin={{
+                      vertical: 'bottom',
+                      horizontal: 'center',
+                    }}
+                    transformOrigin={{
+                      vertical: 'top',
+                      horizontal: 'center',
+                    }}
+                  >
+                    {availableExtraColumns
+                      .filter(col => !extraColumns.includes(col.key)) // Показываем только НЕдобавленные
+                      .map(col => (
+                        <MenuItem key={col.key} onClick={() => handleAddColumnSelect(col.key)}>
+                          {col.label}
+                        </MenuItem>
+                      ))}
+                    {availableExtraColumns.filter(col => !extraColumns.includes(col.key)).length === 0 && (
+                      <MenuItem disabled>Нет доступных колонок</MenuItem>
+                    )}
+                  </Menu>
+                </TableCell>
+                {/* Динамические дополнительные колонки */}
+                {extraColumns.map(colKey => {
+                  const columnDef = availableExtraColumns.find(col => col.key === colKey);
+                  return (
+                    <TableCell key={colKey} sx={{ fontWeight: 'bold', position: 'relative' }}>
+                      <TableSortLabel
+                        active={sortColumn === colKey}
+                        direction={sortColumn === colKey ? sortOrder : 'asc'}
+                        onClick={() => handleSort(colKey)}
+                        sx={{ fontWeight: 'bold', paddingRight: '24px' }} // Отступ для крестика
+                      >
+                        {columnDef ? columnDef.label : colKey}
+                      </TableSortLabel>
+                      {/* Кнопка "крестик" для удаления колонки */}
+                      <IconButton
+                        size="small"
+                        onClick={() => handleRemoveExtraColumn(colKey)}
+                        sx={{
+                          position: 'absolute',
+                          top: '50%',
+                          right: 0,
+                          transform: 'translateY(-50%)',
+                          color: 'red', // Красный крестик
+                          opacity: 0, // Скрыто по умолчанию
+                          transition: 'opacity 0.2s',
+                          padding: '2px',
+                          '&:hover': {
+                            backgroundColor: 'rgba(255, 0, 0, 0.1)'
+                          }
+                        }}
+                        className="remove-column-button" // Для стилей наведения
+                      >
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </TableCell>
+                  );
+                })}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {paginatedAssets.length > 0 ? (
+                paginatedAssets.map((asset) => {
+                  const isItemSelected = isSelected(asset.id);
+                  return (
+                    <TableRow
+                      key={asset.id}
+                      hover
+                      onClick={(event) => {
+                        if (event.target.type !== 'checkbox') {
+                          // <<<--- ИЗМЕНЕНО: Проверка перед навигацией
+                          if (selectedAssets.length > 0) {
+                            if (window.confirm("У вас есть выделенные активы. Вы уверены, что хотите открыть карточку?")) {
+                              navigate(`/assets/${asset.id}`);
+                            }
+                          } else {
                             navigate(`/assets/${asset.id}`);
                           }
-                        } else {
-                          navigate(`/assets/${asset.id}`);
                         }
-                      }
-                    }}
-                    selected={isItemSelected}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <TableCell padding="checkbox">
-                      <Checkbox
-                        checked={isItemSelected}
-                        onChange={(event) => handleClick(event, asset.id)}
-                        onClick={(event) => event.stopPropagation()} // Останавливаем всплытие, чтобы не открывать карточку
-                      />
-                    </TableCell>
-                    <TableCell>{asset.inventory_number}</TableCell>
-                    <TableCell>{`${getTypeName(asset.type_id) || ''} ${asset.brand || ''} ${asset.model || ''}`.trim() || '-'}</TableCell>
-                    {/* <<<--- ИЗМЕНЕНО: Отображение ответственного в формате ФИО */}
-                    <TableCell>{getEmployeeName(asset.responsible_person) || '-'}</TableCell>
-                    <TableCell>{getDepartmentName(asset.department_id) || '-'}</TableCell>
-                    <TableCell>{asset.room || '-'}</TableCell>
-                    {/* Пустая ячейка для кнопки "+" */}
-                    <TableCell></TableCell>
-                    {/* Данные для дополнительных колонок */}
-                    {extraColumns.map(colKey => {
-                      if (colKey === 'status_id') {
-                        return <TableCell key={colKey}>{getStatusName(asset.status_id) || '-'}</TableCell>;
-                      }
-                      if (colKey === 'purchase_date' && asset.purchase_date) {
-                        return <TableCell key={colKey}>{new Date(asset.purchase_date).toLocaleDateString()}</TableCell>;
-                      }
-                      // Для остальных полей используем имя из JSON
-                      return <TableCell key={colKey}>{asset[colKey] || '-'}</TableCell>;
-                    })}
-                  </TableRow>
-                );
-              })
-            ) : (
-              <TableRow>
-                <TableCell colSpan={totalColumnCount} align="center">
-                  Нет данных
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+                      }}
+                      selected={isItemSelected}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={isItemSelected}
+                          onChange={(event) => handleClick(event, asset.id)}
+                          onClick={(event) => event.stopPropagation()} // Останавливаем всплытие, чтобы не открывать карточку
+                        />
+                      </TableCell>
+                      <TableCell>{asset.inventory_number}</TableCell>
+                      <TableCell>{`${getTypeName(asset.type_id) || ''} ${asset.brand || ''} ${asset.model || ''}`.trim() || ''}</TableCell>
+                      <TableCell>{getEmployeeName(asset.responsible_person) || ''}</TableCell>
+                      <TableCell>{getDepartmentName(asset.department_id) || ''}</TableCell>
+                      <TableCell>{asset.room || ''}</TableCell>
+                      <TableCell></TableCell>
+                      {extraColumns.map(colKey => {
+                        if (colKey === 'status_id') {
+                          return <TableCell key={colKey}>{getStatusName(asset.status_id) || ''}</TableCell>;
+                        }
+                        if (colKey === 'purchase_date' && asset.purchase_date) {
+                          return <TableCell key={colKey}>{new Date(asset.purchase_date).toLocaleDateString()}</TableCell>;
+                        }
+                        if (colKey === 'actual_user') {
+                          return <TableCell key={colKey}>{getEmployeeName(asset.actual_user) || ''}</TableCell>;
+                        }
+                        return <TableCell key={colKey}>{asset[colKey] || ''}</TableCell>;
+                      })}
+                    </TableRow>
+                  );
+                })
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={totalColumnCount} align="center">
+                    Нет данных
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
 
-      <TablePagination
-        rowsPerPageOptions={[10, 25, 50, 100]}
-        component="div"
-        count={filteredAssets.length}
-        rowsPerPage={rowsPerPage}
-        page={page}
-        onPageChange={handleChangePage}
-        onRowsPerPageChange={handleChangeRowsPerPage}
-        labelRowsPerPage="Строк на странице:"
-        labelDisplayedRows={({ from, to, count }) => `${from}-${to} из ${count}`}
-      />
+        <TablePagination
+          rowsPerPageOptions={[10, 25, 50, 100]}
+          component="div"
+          count={filteredAssets.length}
+          rowsPerPage={rowsPerPage}
+          page={page}
+          onPageChange={handleChangePage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+          labelRowsPerPage="Строк на странице:"
+          labelDisplayedRows={({ from, to, count }) => `${from}-${to} из ${count}`}
+        />
 
-      {/* Диалог подтверждения удаления */}
-      <Dialog
-        open={deleteDialogOpen}
-        onClose={closeDeleteDialog}
-        aria-labelledby="alert-dialog-title"
-        aria-describedby="alert-dialog-description"
-      >
-        <DialogTitle id="alert-dialog-title">
-          {"Подтвердите удаление"}
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText id="alert-dialog-description">
-            Вы уверены, что хотите удалить {assetsToDelete.length} актив(ов)?
-            Это действие нельзя отменить.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeDeleteDialog} color="primary">
-            Отмена
-          </Button>
-          <Button onClick={confirmDelete} color="error" autoFocus>
-            Удалить
-          </Button>
-        </DialogActions>
-      </Dialog>
+        {/* Диалог подтверждения удаления */}
+        <Dialog
+          open={deleteDialogOpen}
+          onClose={closeDeleteDialog}
+          aria-labelledby="alert-dialog-title"
+          aria-describedby="alert-dialog-description"
+        >
+          <DialogTitle id="alert-dialog-title">
+            {"Подтвердите удаление"}
+          </DialogTitle>
+          <DialogContent>
+            <DialogContentText id="alert-dialog-description">
+              Вы уверены, что хотите удалить {assetsToDelete.length} актив(ов)?
+              Это действие нельзя отменить.
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeDeleteDialog} color="primary">
+              Отмена
+            </Button>
+            <Button onClick={confirmDelete} color="error" autoFocus>
+              Удалить
+            </Button>
+          </DialogActions>
+        </Dialog>
 
-      {/* <<<--- НОВОЕ: Диалог подтверждения навигации */}
-      <Dialog
-        open={navDialogOpen}
-        onClose={() => handleNavDialogClose(false)}
-        aria-labelledby="nav-dialog-title"
-        aria-describedby="nav-dialog-description"
-      >
-        <DialogTitle id="nav-dialog-title">
-          {"Подтвердите переход"}
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText id="nav-dialog-description">
-            У вас есть выделенные активы. Вы уверены, что хотите покинуть страницу?
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => handleNavDialogClose(false)} color="primary">
-            Остаться
-          </Button>
-          <Button onClick={() => handleNavDialogClose(true)} color="error" autoFocus>
-            Покинуть
-          </Button>
-        </DialogActions>
-      </Dialog>
+        {/* <<<--- НОВОЕ: Диалог подтверждения навигации */}
+        <Dialog
+          open={navDialogOpen}
+          onClose={() => handleNavDialogClose(false)}
+          aria-labelledby="nav-dialog-title"
+          aria-describedby="nav-dialog-description"
+        >
+          <DialogTitle id="nav-dialog-title">
+            {"Подтвердите переход"}
+          </DialogTitle>
+          <DialogContent>
+            <DialogContentText id="nav-dialog-description">
+              У вас есть выделенные активы. Вы уверены, что хотите покинуть страницу?
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => handleNavDialogClose(false)} color="primary">
+              Остаться
+            </Button>
+            <Button onClick={() => handleNavDialogClose(true)} color="error" autoFocus>
+              Покинуть
+            </Button>
+          </DialogActions>
+        </Dialog>
 
-      {/* Уведомления */}
-      <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleCloseSnackbar}>
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-      <style>{`
-        .MuiTableCell-root:hover .remove-column-button {
-          opacity: 1;
-        }
-      `}</style>
+        {/* Уведомления */}
+        <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleCloseSnackbar}>
+          <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
+        <style>{`
+          .MuiTableCell-root:hover .remove-column-button {
+            opacity: 1;
+          }
+        `}</style>
+      </Paper>
     </Container>
   );
 };

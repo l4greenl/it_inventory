@@ -9,34 +9,38 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Typography
+  Typography,
+  TablePagination
 } from '@mui/material';
 import axios from 'axios';
-// useNavigate удален, так как навигация больше не используется
 
 const MovesList = () => {
   const [moves, setMoves] = useState([]);
   const [filteredMoves, setFilteredMoves] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortColumn, setSortColumn] = useState('date');
-  const [sortOrder, setSortOrder] = useState('desc'); // По умолчанию сортировка по дате по убыванию
+  const [sortOrder, setSortOrder] = useState('desc');
+  
+  // Состояния для пагинации
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25); // По умолчанию 25 строк
 
   // Получаем данные с сервера
   useEffect(() => {
     const fetchMoves = async () => {
-      try { // Добавлена обработка ошибок
+      try {
         const res = await axios.get('http://localhost:5000/api/moves');
         setMoves(res.data);
         setFilteredMoves(res.data);
+        // Исправлено: Удалена попытка установить setFilteredAssets, которого нет
       } catch (error) {
         console.error('Ошибка загрузки истории перемещений:', error);
-        // Можно добавить уведомление об ошибке для пользователя
       }
     };
     fetchMoves();
   }, []);
 
-  // Фильтрация по строке поиска (охватывает все поля, включая отформатированную дату)
+  // Фильтрация по строке поиска
   useEffect(() => {
     if (!searchTerm.trim()) {
       setFilteredMoves(moves);
@@ -46,31 +50,29 @@ const MovesList = () => {
     const searchLower = searchTerm.toLowerCase();
 
     const filtered = moves.filter(move => {
-      // Форматируем дату только для отображения и поиска
-      const formattedDate = new Date(move.date).toLocaleDateString('ru-RU'); // Формат ДД.ММ.ГГГГ
-
+      const formattedDate = new Date(move.date).toLocaleDateString('ru-RU');
       const fieldsToSearch = [
         move.inventory_number || '',
         move.asset_name || '',
         move.from_room || '',
         move.to_room || '',
-        formattedDate || '' // Используем отформатированную дату для поиска
+        formattedDate || ''
       ].join(' ').toLowerCase();
 
       return fieldsToSearch.includes(searchLower);
     });
 
     setFilteredMoves(filtered);
+    setPage(0); // Сброс на первую страницу после фильтрации
   }, [searchTerm, moves]);
 
-  // Сортировка активов
+  // Сортировка
   const sortedMoves = [...filteredMoves].sort((a, b) => {
     let comparison = 0;
 
     switch (sortColumn) {
       case 'date':
-        // Сортировка по дате напрямую как объектам Date
-        comparison = new Date(a.date) - new Date(b.date); // Исправлено: сортировка по убыванию по умолчанию
+        comparison = new Date(a.date) - new Date(b.date);
         break;
       case 'inventory_number':
         comparison = a.inventory_number?.localeCompare(b.inventory_number, undefined, { numeric: true, sensitivity: 'base' }) || 0;
@@ -79,7 +81,6 @@ const MovesList = () => {
         comparison = a.asset_name?.localeCompare(b.asset_name, undefined, { sensitivity: 'base' }) || 0;
         break;
       case 'from_room':
-        // Сортировка с учетом возможных null/undefined значений
         const roomA = (a.from_room || '').toLowerCase();
         const roomB = (b.from_room || '').toLowerCase();
         comparison = roomA.localeCompare(roomB);
@@ -94,6 +95,7 @@ const MovesList = () => {
     }
 
     // Применяем порядок сортировки
+    // Исправлено: Логика сортировки была внутри switch, что некорректно
     if (sortOrder === 'desc') {
       comparison = -comparison;
     }
@@ -111,37 +113,45 @@ const MovesList = () => {
     }
   };
 
+  // Обработчики пагинации
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0); // Сброс на первую страницу при изменении количества строк
+  };
+
+  // Получаем данные для текущей страницы
+  const paginatedMoves = sortedMoves.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
   return (
-    <Container maxWidth="lg">
+    <Container maxWidth="xl" style={{ marginTop: '20px' }}>
       <Paper elevation={3} style={{ padding: '20px', marginTop: '20px' }}>
         <Typography variant="h5" gutterBottom style={{ textAlign: 'center', fontSize: '30px' }}>
           <strong>История перемещений</strong>
         </Typography>
 
-        {/* Поисковая строка */}
         <TextField
-          label="Поиск по всем полям"
+          label="Поиск"
           fullWidth
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           style={{ marginBottom: '16px' }}
         />
 
-        {/* Таблица */}
         <TableContainer component={Paper}>
           <Table>
             <TableHead>
               <TableRow>
-                {/* Добавлен уникальный ключ для TableRow в TableHead */}
                 <TableCell
-                  key="date-header"
                   onClick={() => handleSort('date')}
-                  sx={{ cursor: 'pointer', fontWeight: 'bold' }} // Выделение заголовков
+                  sx={{ cursor: 'pointer', fontWeight: 'bold' }}
                 >
                   Дата {sortColumn === 'date' && (sortOrder === 'asc' ? '↑' : '↓')}
                 </TableCell>
                 <TableCell
-                  key="inventory-header"
                   onClick={() => handleSort('inventory_number')}
                   sx={{ cursor: 'pointer', fontWeight: 'bold' }}
                 >
@@ -149,7 +159,6 @@ const MovesList = () => {
                   {sortColumn === 'inventory_number' && (sortOrder === 'asc' ? '↑' : '↓')}
                 </TableCell>
                 <TableCell
-                  key="name-header"
                   onClick={() => handleSort('asset_name')}
                   sx={{ cursor: 'pointer', fontWeight: 'bold' }}
                 >
@@ -157,7 +166,6 @@ const MovesList = () => {
                   {sortColumn === 'asset_name' && (sortOrder === 'asc' ? '↑' : '↓')}
                 </TableCell>
                 <TableCell
-                  key="from-header"
                   onClick={() => handleSort('from_room')}
                   sx={{ cursor: 'pointer', fontWeight: 'bold' }}
                 >
@@ -165,7 +173,6 @@ const MovesList = () => {
                   {sortColumn === 'from_room' && (sortOrder === 'asc' ? '↑' : '↓')}
                 </TableCell>
                 <TableCell
-                  key="to-header"
                   onClick={() => handleSort('to_room')}
                   sx={{ cursor: 'pointer', fontWeight: 'bold' }}
                 >
@@ -175,13 +182,9 @@ const MovesList = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {sortedMoves.length > 0 ? (
-                sortedMoves.map((move) => (
-                  // Удален onClick и стили для ховера, связанные с навигацией
-                  <TableRow
-                    key={move.id} // Добавлен уникальный ключ
-                  >
-                    {/* Отображаем только дату */}
+              {paginatedMoves.length > 0 ? (
+                paginatedMoves.map((move) => (
+                  <TableRow key={move.id}>
                     <TableCell>{new Date(move.date).toLocaleDateString('ru-RU')}</TableCell>
                     <TableCell>{move.inventory_number}</TableCell>
                     <TableCell>{move.asset_name}</TableCell>
@@ -199,6 +202,21 @@ const MovesList = () => {
             </TableBody>
           </Table>
         </TableContainer>
+        
+        {/* Добавлена пагинация */}
+        <TablePagination
+          rowsPerPageOptions={[10, 25, 50, 100]}
+          component="div"
+          count={sortedMoves.length} // Используем длину отсортированного массива
+          rowsPerPage={rowsPerPage}
+          page={page}
+          onPageChange={handleChangePage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+          labelRowsPerPage="Строк на странице:"
+          labelDisplayedRows={({ from, to, count }) => 
+            `${from}-${to} из ${count !== -1 ? count : `больше чем ${to}`}`
+          }
+        />
       </Paper>
     </Container>
   );

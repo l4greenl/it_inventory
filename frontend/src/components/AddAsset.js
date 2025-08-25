@@ -402,15 +402,24 @@ const AddAsset = ({ currentUser }) => {
           </Grid>
 
           <Grid item xs={12} sm={6}>
-            <TextField
-              label="Фактический пользователь"
-              name="actual_user"
-              value={asset.actual_user}
-              onChange={handleChange}
-              fullWidth
-              margin="normal"
-              sx={{ mb: -1 }}
-            />
+            <FormControl fullWidth margin="normal" sx={{ mb: -1 }}>
+              <InputLabel id="actual-user-label">Фактический пользователь</InputLabel>
+              <Select
+                labelId="actual-user-label"
+                label="Фактический пользователь"
+                name="actual_user"
+                value={asset.actual_user || ''}
+                onChange={handleChange}
+                sx={{ mb: 0 }}
+
+              >
+                {employees.map((emp) => (
+                  <MenuItem key={`actual-${emp.id}`} value={emp.id}>
+                    {emp.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Grid>
 
           <Grid item xs={12} sm={6}>
@@ -421,9 +430,8 @@ const AddAsset = ({ currentUser }) => {
                 label="Ответственный *"
                 name="responsible_person"
                 value={asset.responsible_person}
-                // <<<--- ИЗМЕНЕНО: Используется функция с логикой автоматического заполнения отдела
                 onChange={handleResponsiblePersonChange}
-                sx={{ mb: -1 }}
+                sx={{ mb: 0 }}
               >
                 {employees.map((emp) => (
                   <MenuItem key={emp.id} value={emp.id}>

@@ -599,16 +599,25 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
             </FormControl>
           </Grid>
           <Grid item xs={12} sm={6}>
-            <TextField
-              label="Фактический пользователь"
-              name="actual_user"
-              value={isEditing ? editedAsset.actual_user : asset.actual_user}
-              onChange={handleChange}
-              fullWidth
-              margin="normal"
-              sx={{ mb: -1 }}
-              disabled={!currentUser || currentUser.role !== 'admin'}
-            />
+            <FormControl fullWidth margin="normal" sx={{ mb: -1 }}>
+              <InputLabel id="actual-user-label">Фактический пользователь</InputLabel>
+              <Select
+                labelId="actual-user-label"
+                label="Фактический пользователь"
+                name="actual_user"
+                value={asset.actual_user || ''}
+                onChange={handleChange}
+                sx={{ mb: 0 }}
+                disabled={!currentUser || currentUser.role !== 'admin'}
+
+              >
+                {employees.map((emp) => (
+                  <MenuItem key={`actual-${emp.id}`} value={emp.id}>
+                    {emp.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Grid>
 
           {/* Ответственный | Отдел (подразделение) - ВСЕГДА СЕРЫЙ и ОТКЛЮЧЕННЫЙ */}

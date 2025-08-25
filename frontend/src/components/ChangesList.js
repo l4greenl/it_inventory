@@ -9,6 +9,7 @@ import {
   TableBody,
   TableCell,
   TableRow,
+  TablePagination // <<< ДОБАВИЛ: Импорт TablePagination
 } from '@mui/material';
 
 // Форматируем дату под нужный вид
@@ -41,6 +42,10 @@ const getActionLabel = (action) => {
 const ChangesList = () => {
   const [changes, setChanges] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // <<< ДОБАВИЛ: Состояния для пагинации
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25); // По умолчанию 25 строк
 
   // Загружаем историю изменений
   useEffect(() => {
@@ -66,6 +71,22 @@ const ChangesList = () => {
     return assetInfo.includes(searchLower);
   });
 
+  // <<< ДОБАВИЛ: Обработчики пагинации
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0); // Сброс на первую страницу при изменении количества строк
+  };
+
+  // <<< ДОБАВИЛ: Получаем данные для текущей страницы
+  const paginatedChanges = filteredChanges.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
+
   return (
     <Container maxWidth="lg">
       <Paper elevation={3} style={{ padding: '20px', marginTop: '20px' }}>
@@ -86,8 +107,8 @@ const ChangesList = () => {
         {/* Таблица */}
         <Table size="small">
           <TableBody>
-            {filteredChanges.length > 0 ? (
-              filteredChanges.map((change) => {
+            {paginatedChanges.length > 0 ? (
+              paginatedChanges.map((change) => {
                 const isUpdate = change.action === 'updated';
 
                 return (
@@ -116,6 +137,21 @@ const ChangesList = () => {
             )}
           </TableBody>
         </Table>
+        
+        {/* <<< ДОБАВИЛ: Компонент пагинации */}
+        <TablePagination
+          rowsPerPageOptions={[10, 25, 50, 100]}
+          component="div"
+          count={filteredChanges.length} // Используем длину отфильтрованного массива
+          rowsPerPage={rowsPerPage}
+          page={page}
+          onPageChange={handleChangePage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+          labelRowsPerPage="Строк на странице:"
+          labelDisplayedRows={({ from, to, count }) => 
+            `${from}-${to} из ${count !== -1 ? count : `больше чем ${to}`}`
+          }
+        />
       </Paper>
     </Container>
   );
