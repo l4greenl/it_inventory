@@ -10,6 +10,8 @@ import {
   TableCell,
   TableBody,
 } from '@mui/material';
+import { API_BASE_URL } from '../config'; // Импорт базового URL
+
 
 const EmployeeList = () => {
   const [employees, setEmployees] = useState([]);
@@ -22,9 +24,9 @@ const EmployeeList = () => {
     const fetchData = async () => {
       try {
         // Загружаем сотрудников и отделы
-        const empsRes = await axios.get('http://localhost:5000/api/employees');
-        const depsRes = await axios.get('http://localhost:5000/api/departments');
-        const assetsRes = await axios.get('http://localhost:5000/api/assets');
+        const empsRes = await axios.get(`${API_BASE_URL}/api/employees`);
+        const depsRes = await axios.get(`${API_BASE_URL}api/departments`);
+        const assetsRes = await axios.get(`${API_BASE_URL}api/assets`);
 
         const emps = empsRes.data;
         const deps = depsRes.data;

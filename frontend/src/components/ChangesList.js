@@ -11,6 +11,8 @@ import {
   TableRow,
   TablePagination // <<< ДОБАВИЛ: Импорт TablePagination
 } from '@mui/material';
+import { API_BASE_URL } from '../config'; // Импорт базового URL
+
 
 // Форматируем дату под нужный вид
 const formatDate = (dateString) => {
@@ -49,7 +51,7 @@ const ChangesList = () => {
 
   // Загружаем историю изменений
   useEffect(() => {
-    axios.get('http://localhost:5000/api/changes')
+    axios.get(`${API_BASE_URL}/api/changes`)
       .then(res => setChanges(res.data))
       .catch(err => console.error('Ошибка загрузки истории:', err));
   }, []);

@@ -3,6 +3,9 @@
 import React from 'react';
 import { Box, Typography, Button } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../config'; // Импорт базового URL
+
+
 
 const Header = ({ currentUser, setCurrentUser }) => {
   const navigate = useNavigate();
@@ -14,7 +17,7 @@ const Header = ({ currentUser, setCurrentUser }) => {
   const handleLogout = async () => {
     try {
       // Отправляем запрос на выход
-      await fetch('http://localhost:5000/api/logout', {
+      await fetch(`${API_BASE_URL}/api/logout`, {
         method: 'GET',
         credentials: 'include' // важно для передачи сессии/куки
       });

@@ -13,6 +13,8 @@ import {
   TablePagination
 } from '@mui/material';
 import axios from 'axios';
+import { API_BASE_URL } from '../config'; // Импорт базового URL
+
 
 const MovesList = () => {
   const [moves, setMoves] = useState([]);
@@ -29,7 +31,7 @@ const MovesList = () => {
   useEffect(() => {
     const fetchMoves = async () => {
       try {
-        const res = await axios.get('http://localhost:5000/api/moves');
+        const res = await axios.get(`${API_BASE_URL}/api/moves`);
         setMoves(res.data);
         setFilteredMoves(res.data);
         // Исправлено: Удалена попытка установить setFilteredAssets, которого нет

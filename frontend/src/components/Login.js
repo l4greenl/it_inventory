@@ -9,6 +9,7 @@ import {
   Button,
   Typography
 } from '@mui/material';
+import { API_BASE_URL } from '../config'; // Импорт базового URL
 import { useNavigate } from 'react-router-dom';
 
 const Login = ({ onLogin }) => {
@@ -22,8 +23,8 @@ const Login = ({ onLogin }) => {
     setError('');
 
     try {
-      const response = await axios.post(
-        'http://localhost:5000/api/login',
+      const response = await axios.post
+        (`${API_BASE_URL}/api/login`,
         { username, password },
         { withCredentials: true }
       );
