@@ -357,8 +357,11 @@ def delete_asset(id):
     asset = Asset.query.get_or_404(id)
     
     try:
-        asset_type = asset.type
-        type_name = asset_type.name if asset_type else "Без типа"
+        asset_type_obj = db.session.get(Type, asset.type_id) # Используем db.session.get для SQLAlchemy 2.x
+        # Получаем имя типа или задаем значение по умолчанию
+        type_name = asset_type_obj.name if asset_type_obj else "Без типа"
+
+        # Формируем имя актива для лога, используя type_name
         asset_name = f"{type_name} {asset.brand} {asset.model}".strip()
         
         change = Change(
