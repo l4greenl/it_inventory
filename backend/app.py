@@ -155,76 +155,94 @@ def get_asset(id):
 @app.route('/api/assets', methods=['POST'])
 @login_required
 def create_asset():
-    data = request.get_json() # <<<--- Используем get_json()
+    """Создает новый актив."""
+    data = request.get_json()
     if not data:
         return jsonify({'error': 'Нет данных для создания актива'}), 400
 
-    # Извлекаем данные с дефолтными значениями, чтобы избежать KeyError
-    # Обязательные поля
-    inventory_number = data.get('inventory_number')
-    type_id = data.get('type_id') # В API используем type_id
-    status_id = data.get('status_id')
-    
-    if not all([inventory_number, type_id, status_id]):
-        missing = []
-        if not inventory_number: missing.append('inventory_number')
-        if not type_id: missing.append('type_id')
-        if not status_id: missing.append('status_id')
+    # --- Проверка обязательных полей ---
+    required_fields = ['inventory_number', 'type_id', 'status_id']
+    missing = [f for f in required_fields if not data.get(f)]
+    if missing:
         return jsonify({'error': 'Отсутствуют обязательные поля', 'missing': missing}), 400
+    # --- Конец проверки обязательных полей ---
 
     try:
+        # --- Функция для безопасного получения целочисленного значения ---
+        def get_int_or_none(key):
+            value = data.get(key)
+            if value is None or value == '':
+                return None
+            try:
+                return int(value)
+            except (ValueError, TypeError):
+                app.logger.warning(f"Невозможно преобразовать значение '{value}' для поля '{key}' в integer. Установлено в None.")
+                return None
+        # --- Конец функции ---
 
+        # --- Обработка даты ---
+        purchase_date_value = None
+        if data.get('purchase_date'):
+            try:
+                purchase_date_value = date.fromisoformat(data['purchase_date'])
+            except ValueError:
+                app.logger.warning(f"Неверный формат даты: {data['purchase_date']}")
+        # --- Конец обработки даты ---
+
+        # --- Создание объекта актива ---
         new_asset = Asset(
             serial_number=data.get('serial_number'),
-            inventory_number=inventory_number,
-            # Убираем поле 'type', так как используем связь type_obj
+            inventory_number=data.get('inventory_number'),
             brand=data.get('brand'),
             model=data.get('model'),
-            type_id=type_id, # Используем type_id для связи
-            department_id=data.get('department_id'),
+            type_id=get_int_or_none('type_id'),
+            department_id=get_int_or_none('department_id'),
             room=data.get('room'),
-            # <<<--- ИЗМЕНЕНО: Обработка purchase_date с проверкой
-            purchase_date=date.fromisoformat(data['purchase_date']) if data.get('purchase_date') else None,
-            responsible_person=data.get('responsible_person'),
-            actual_user=data.get('actual_user'),
+            purchase_date=purchase_date_value,
+            responsible_person=get_int_or_none('responsible_person'),
+            actual_user=get_int_or_none('actual_user'), # Используем get_int_or_none
             comments=data.get('comments'),
-            status_id=status_id,
-            diagonal=data.get('diagonal'),
-            CPU=data.get('CPU'),
-            RAM=data.get('RAM'),
-            Drive=data.get('Drive'),
-            OS=data.get('OS'),
-            IP_address=data.get('IP_address'),
-            number=data.get('number')
+            status_id=get_int_or_none('status_id'),
+            diagonal=data.get('diagonal'), # Предполагается, что это VARCHAR/TEXT
+            CPU=data.get('CPU'),          # Предполагается, что это VARCHAR/TEXT
+            RAM=data.get('RAM'),          # Предполагается, что это VARCHAR/TEXT
+            Drive=data.get('Drive'),      # Предполагается, что это VARCHAR/TEXT
+            OS=data.get('OS'),            # Предполагается, что это VARCHAR/TEXT
+            IP_address=data.get('IP_address'), # Предполагается, что это VARCHAR/TEXT
+            number=data.get('number')     # Предполагается, что это VARCHAR/TEXT или INTEGER (если INTEGER, используйте get_int_or_none)
+            # Добавьте другие динамические поля, если они есть в модели и отправляются
         )
         db.session.add(new_asset)
         db.session.flush() # Получаем new_asset.id
+        # --- Конец создания объекта ---
 
-        # 2. Формируем имя актива для лога (используем type_obj)
-        # <<<--- ИЗМЕНЕНО: Получаем имя типа через связь type_obj
-        asset_type = new_asset.type_obj # Используем правильное имя связи
-        type_name = asset_type.name if asset_type else "Без типа"
-        
-        # 3. Логируем событие "created"
+        # --- Формирование имени актива для лога ---
+        # Используем db.session.get для SQLAlchemy 2.x (устраняет LegacyAPIWarning)
+        asset_type_obj = db.session.get(Type, new_asset.type_id) if new_asset.type_id else None
+        type_name = asset_type_obj.name if asset_type_obj else "Без типа"
+        asset_name = f"{type_name} {new_asset.brand} {new_asset.model}".strip()
+        # --- Конец формирования имени ---
+
+        # --- Логирование создания ---
         change = Change(
             asset_id=new_asset.id,
             inventory_number=new_asset.inventory_number,
-            asset_name=f"{type_name} {new_asset.brand} {new_asset.model}".strip(), # Формируем имя
+            asset_name=asset_name,
             action='created',
-            field='created', # Указываем поле
+            field='created',
             old_value='',
             new_value='Актив создан'
         )
         db.session.add(change)
+        # --- Конец логирования ---
 
         db.session.commit()
-        # Возвращаем созданный актив
         return jsonify(new_asset.to_dict()), 201
 
-    except ValueError as ve: # Для ошибок преобразования даты
+    except ValueError as ve:
         db.session.rollback()
         app.logger.error(f"Ошибка преобразования данных при создании актива: {ve}")
-        return jsonify({'error': 'Неверный формат данных, например, даты', 'details': str(ve)}), 400
+        return jsonify({'error': 'Неверный формат данных (например, даты или ID)', 'details': str(ve)}), 400
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Ошибка при создании актива: {e}")

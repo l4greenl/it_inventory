@@ -1,3 +1,4 @@
+// frontend/src/components/EmployeeList.js
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import {
@@ -25,8 +26,8 @@ const EmployeeList = () => {
       try {
         // Загружаем сотрудников и отделы
         const empsRes = await axios.get(`${API_BASE_URL}/api/employees`);
-        const depsRes = await axios.get(`${API_BASE_URL}api/departments`);
-        const assetsRes = await axios.get(`${API_BASE_URL}api/assets`);
+        const depsRes = await axios.get(`${API_BASE_URL}/api/departments`);
+        const assetsRes = await axios.get(`${API_BASE_URL}/api/assets`);
 
         const emps = empsRes.data;
         const deps = depsRes.data;
