@@ -66,13 +66,41 @@ const AssetList = ({ currentUser }) => {
   const navigate = useNavigate();
   const location = useLocation(); // Получаем текущую локацию
 
-  // <<<--- НОВОЕ: Функция для форматирования ФИО
   const formatEmployeeName = useCallback((fullName) => {
     if (!fullName) return '';
-    const parts = fullName.trim().split(/\s+/);
+    
+    // Удаляем возможные скобки и содержимое в скобках (должность)
+    // Например: "Тетерин Александр Викторович (инженер)" -> "Тетерин Александр Викторович"
+    let nameWithoutPosition = fullName.replace(/\s*\(.*?\)\s*$/, '').trim();
+    
+    if (!nameWithoutPosition) return '';
+    
+    const parts = nameWithoutPosition.split(/\s+/);
+    
     if (parts.length === 0) return '';
     if (parts.length === 1) return parts[0];
-    return `${parts[0]} ${parts.slice(1).map(part => part.charAt(0).toUpperCase() + '.').join('')}`.trim();
+    
+    // Для каждой части имени (кроме первой - фамилии) проверяем, 
+    // заканчивается ли она на точку. Если да - берем как есть, 
+    // если нет - берем первую букву и добавляем точку
+    const initials = parts.slice(1).map(part => {
+      if (part.endsWith('.')) {
+        // Уже является инициалом (например, "А.В.")
+        // Берем часть до последней точки
+        const cleanPart = part.slice(0, -1);
+        // Если там несколько букв (например, "А.В"), превращаем в "А.В."
+        if (cleanPart.length > 1) {
+          return cleanPart.split('').join('.') + '.';
+        }
+        // Если одна буква, возвращаем как есть
+        return part;
+      } else {
+        // Обычное имя, берем первую букву
+        return part.charAt(0).toUpperCase() + '.';
+      }
+    }).join('');
+    
+    return `${parts[0]} ${initials}`.trim();
   }, []);
 
   // <<<--- НОВОЕ: Обработчик beforeunload
@@ -149,11 +177,14 @@ const AssetList = ({ currentUser }) => {
     return dept ? dept.name : '';
   }, [departments]); // Зависит только от departments
 
+  // Функция для получения отформатированного имени сотрудника по его ID
   const getEmployeeName = useCallback((empId) => {
-    const emp = employees.find(e => e.id === empId);
-    // Используем форматирование ФИО
-    return emp ? formatEmployeeName(emp.name) : '';
-  }, [employees]); // Зависит только от employees
+    if (!empId) return ''; // Возвращаем пустую строку, если ID не передан
+    const employee = employees.find(emp => emp.id === empId); // Ищем сотрудника в списке
+    // Если сотрудник найден, применяем formatEmployeeName к его имени, иначе возвращаем пустую строку
+    return employee ? formatEmployeeName(employee.name) : '';
+    // Предполагается, что employee.name содержит полное ФИО, например, "Иванов Иван Иванович"
+  }, [employees]); // Зависит от списка сотрудников
 
   // Фильтрация и сортировка
   useEffect(() => {
@@ -633,7 +664,7 @@ const AssetList = ({ currentUser }) => {
   const totalColumnCount = baseColumnCount + extraColumns.length;
 
   return (
-    <Container maxWidth="xl" style={{ marginTop: '20px' }}>
+    <Container maxWidth="100%" style={{ marginTop: '20px' }}>
       <Paper elevation={3} style={{ padding: '20px', marginTop: '20px' }}>
         <Typography variant="h5" gutterBottom style={{ textAlign: 'center', fontSize: '30px' }}>
           <strong>Оборудование</strong>
