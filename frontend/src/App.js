@@ -18,6 +18,11 @@ import ChangesList from './components/ChangesList';
 import Login from './components/Login';
 import Header from './components/Header';
 import MovesList from './components/MovesList';
+import NeedsList from './components/NeedsList';
+import AddNeed from './components/AddNeed';
+import EditNeed from './components/EditNeed';
+
+
 
 const theme = createTheme();
 
@@ -73,15 +78,18 @@ function AppContent({ currentUser, setCurrentUser, handleLogin }) {
           }}
         >
           <Routes>
+            <Route path="/" element={<AssetList currentUser={currentUser} />} />
+            <Route path="/login" element={<Login onLogin={handleLogin} />} />
             <Route path="/assets" element={<AssetList currentUser={currentUser} />} />
             <Route path="/assets/:id" element={<AssetDetails currentUser={currentUser} />} />
             <Route path="/assets/new" element={<AddAsset currentUser={currentUser} />} />
-            <Route path="/employees" element={<EmployeeList currentUser={currentUser} />} />
-            <Route path="/directory" element={<Directory currentUser={currentUser} />} />
-            <Route path="/changes" element={<ChangesList currentUser={currentUser} />} />
             <Route path="/moves" element={<MovesList currentUser={currentUser} />} />
-            <Route path="/login" element={<Login onLogin={handleLogin} />} />
-            <Route path="/" element={<AssetList currentUser={currentUser} />} />
+            <Route path="/changes" element={<ChangesList currentUser={currentUser} />} />
+            <Route path="/employees" element={<EmployeeList currentUser={currentUser} />} />
+            <Route path="/needs" element={<NeedsList currentUser={currentUser} />} />
+            <Route path="/needs/new" element={<AddNeed currentUser={currentUser} />} />
+            <Route path="/needs/:id" element={<EditNeed currentUser={currentUser} />} />
+            <Route path="/directory" element={<Directory currentUser={currentUser} />} />
           </Routes>
         </main>
       </div>

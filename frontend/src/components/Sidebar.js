@@ -20,9 +20,9 @@ import PeopleIcon from '@mui/icons-material/People';
 import BookIcon from '@mui/icons-material/Book';
 import HistoryIcon from '@mui/icons-material/History';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
-import MenuIcon from '@mui/icons-material/Menu';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import ListAltIcon from '@mui/icons-material/ListAlt'; // Импорт новой иконки
 
 // Определяем ширину Sidebar
 const drawerWidth = 220;
@@ -62,29 +62,7 @@ const Sidebar = ({ currentUser, isSidebarOpen, toggleSidebar, isSidebarCollapsed
             height: '100%',
           }}
         >
-          {/* Контейнер для кнопки сворачивания/разворачивания */}
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: isSidebarCollapsed ? 'center' : 'flex-end',
-              padding: isSidebarCollapsed ? 1 : '8px 16px',
-              minHeight: 49,
-            }}
-          >
-            {/* Кнопка сворачивания/разворачивания */}
-            {/* Отображается всегда, когда Sidebar открыт, без проверки размера экрана */}
-            {isSidebarOpen && (
-              <Tooltip title={isSidebarCollapsed ? "Развернуть" : "Свернуть"} placement="right">
-                <IconButton onClick={toggleSidebarCollapse}>
-                  {theme.direction === 'rtl' ? 
-                    (isSidebarCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />) : 
-                    (isSidebarCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />)
-                  }
-                </IconButton>
-              </Tooltip>
-            )}
-          </Box>
+
 
           <Divider />
 
@@ -97,8 +75,43 @@ const Sidebar = ({ currentUser, isSidebarOpen, toggleSidebar, isSidebarCollapsed
               }),
             }}
           >
+            {/* Контейнер для кнопки сворачивания/разворачивания */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: isSidebarCollapsed ? 'center' : 'flex-end',
+              }}
+            >
+              {/* Кнопка сворачивания/разворачивания */}
+              {/* Отображается всегда, когда Sidebar открыт, без проверки размера экрана */}
+              {isSidebarOpen && (
+                <Tooltip title={isSidebarCollapsed ? "Развернуть" : ""} placement="right">
+                  <IconButton onClick={toggleSidebarCollapse}>
+                    {theme.direction === 'rtl' ? 
+                      (isSidebarCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />) : 
+                      (isSidebarCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />)
+                    }
+                    <ListItemText
+                    primary="Свернуть"
+                    sx={{
+                      opacity: isSidebarCollapsed ? 0 : 1,
+                      width: isSidebarCollapsed ? 0 : 'auto',
+                      overflow: 'hidden',
+                    }}
+                    />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Box>
+
             {/* Оборудование */}
-            <ListItem disablePadding sx={{ display: 'block' }}>
+            <Tooltip 
+            disablePadding 
+            sx={{ display: 'block' }} 
+            title={isSidebarCollapsed ? "Оборудование": ""} 
+            placement="right"
+            >
               <ListItemButton
                 onClick={() => navigate('/assets')}
                 sx={{
@@ -125,10 +138,15 @@ const Sidebar = ({ currentUser, isSidebarOpen, toggleSidebar, isSidebarCollapsed
                   }}
                 />
               </ListItemButton>
-            </ListItem>
+            </Tooltip>
 
             {/* Перемещения */}
-            <ListItem disablePadding sx={{ display: 'block' }}>
+            <Tooltip 
+            disablePadding 
+            sx={{ display: 'block' }} 
+            title={isSidebarCollapsed ? "Перемещения": ""} 
+            placement="right"
+            >
               <ListItemButton
                 onClick={() => navigate('/moves')}
                 sx={{
@@ -155,10 +173,15 @@ const Sidebar = ({ currentUser, isSidebarOpen, toggleSidebar, isSidebarCollapsed
                   }}
                 />
               </ListItemButton>
-            </ListItem>
+            </Tooltip>
 
             {/* Изменения */}
-            <ListItem disablePadding sx={{ display: 'block' }}>
+            <Tooltip 
+            disablePadding 
+            sx={{ display: 'block' }} 
+            title={isSidebarCollapsed ? "Изменения": ""} 
+            placement="right"
+            >
               <ListItemButton
                 onClick={() => navigate('/changes')}
                 sx={{
@@ -185,10 +208,15 @@ const Sidebar = ({ currentUser, isSidebarOpen, toggleSidebar, isSidebarCollapsed
                   }}
                 />
               </ListItemButton>
-            </ListItem>
+            </Tooltip>
 
             {/* Сотрудники */}
-            <ListItem disablePadding sx={{ display: 'block' }}>
+            <Tooltip 
+            disablePadding 
+            sx={{ display: 'block' }} 
+            title={isSidebarCollapsed ? "Сотрудники": ""} 
+            placement="right"
+            >
               <ListItemButton
                 onClick={() => navigate('/employees')}
                 sx={{
@@ -215,11 +243,46 @@ const Sidebar = ({ currentUser, isSidebarOpen, toggleSidebar, isSidebarCollapsed
                   }}
                 />
               </ListItemButton>
-            </ListItem>
+            </Tooltip>
+
+            {/* Потребности */}
+            <Tooltip 
+            disablePadding 
+            sx={{ display: 'block' }} 
+            title={isSidebarCollapsed ? "Потребности": ""} 
+            placement="right"
+            >
+              <ListItemButton
+                onClick={() => navigate('/needs')}
+                sx={{
+                  minHeight: 48,
+                  justifyContent: isSidebarCollapsed ? 'center' : 'initial',
+                  px: 2.5,
+                }}
+              >
+                <ListItemIcon
+                  sx={{
+                    minWidth: 0,
+                    mr: isSidebarCollapsed ? 0 : 3,
+                    justifyContent: 'center',
+                  }}
+                >
+                  <ListAltIcon />
+                </ListItemIcon>
+                <ListItemText
+                  primary="Потребности"
+                  sx={{
+                    opacity: isSidebarCollapsed ? 0 : 1,
+                    width: isSidebarCollapsed ? 0 : 'auto',
+                    overflow: 'hidden',
+                  }}
+                />
+              </ListItemButton>
+            </Tooltip>
 
             {/* Справочник (только для админов) */}
             {currentUser && currentUser.role === 'admin' && (
-              <ListItem disablePadding sx={{ display: 'block' }}>
+              <Tooltip disablePadding sx={{ display: 'block' }} title={isSidebarCollapsed ? "Справочник": ""} placement="right">
                 <ListItemButton
                   onClick={() => navigate('/directory')}
                   sx={{
@@ -246,7 +309,7 @@ const Sidebar = ({ currentUser, isSidebarOpen, toggleSidebar, isSidebarCollapsed
                   }}
                 />
               </ListItemButton>
-            </ListItem>
+            </Tooltip>
             )}
           </List>
         </Box>

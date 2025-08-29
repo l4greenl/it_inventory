@@ -6,13 +6,14 @@ from flask_migrate import Migrate
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_cors import CORS
 from datetime import date, datetime
+from datetime import date as dt_date
 import io
 import qrcode
 import base64
 from sqlalchemy.exc import IntegrityError
 
 # === Импорты моделей ===
-from models import db, User, Asset, Type, Department, Status, Employee, Change, Property
+from models import db, User, Asset, Type, Department, Status, Employee, Change, Property, Need
 
 # Инициализация приложения
 app = Flask(__name__)
@@ -677,6 +678,213 @@ def delete_employee(id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Не удалось удалить сотрудника. Возможно, он используется.', 'details': str(e)}), 500
+
+# === Эндпоинт для получения списка потребностей ===
+@app.route('/api/needs', methods=['GET'])
+@login_required
+def get_needs():
+    """Получить список всех потребностей."""
+    try:
+        needs = Need.query.all()
+        return jsonify([need.to_dict() for need in needs]), 200
+    except Exception as e:
+        app.logger.error(f"Ошибка при получении списка потребностей: {e}")
+        return jsonify({'error': 'Ошибка при загрузке данных'}), 500
+
+# === Эндпоинт для создания новой потребности ===
+@app.route('/api/needs', methods=['POST'])
+@login_required
+def create_need():
+    """Создать новую потребность."""
+    # Проверка прав доступа (если нужно, например, только для админов)
+    # if current_user.role != 'admin':
+    #     return jsonify({'error': 'Доступ запрещен'}), 403
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Нет данных для создания потребности'}), 400
+
+    # --- Проверка обязательных полей ---
+    required_fields = ['department_id', 'asset_type_id', 'quantity', 'reason_date', 'status']
+    missing_fields = [field for field in required_fields if field not in data or not data.get(field)]
+    if missing_fields:
+        return jsonify({'error': 'Отсутствуют обязательные поля', 'missing': missing_fields}), 400
+
+    # --- Валидация и преобразование данных ---
+    errors = {}
+    try:
+        department_id = int(data['department_id'])
+        asset_type_id = int(data['asset_type_id'])
+        quantity = int(data['quantity'])
+        if quantity <= 0:
+             errors['quantity'] = 'Количество должно быть положительным числом'
+        # Проверка существования department и asset_type (опционально, но рекомендуется)
+        # department = Department.query.get(department_id)
+        # if not department:
+        #     errors['department_id'] = 'Отдел не найден'
+        # asset_type = Type.query.get(asset_type_id)
+        # if not asset_type:
+        #     errors['asset_type_id'] = 'Тип устройства не найден'
+        
+        # reason_date_str = data['reason_date']
+        # reason_date = dt_date.fromisoformat(reason_date_str) # Ожидаем формат YYYY-MM-DD
+    except ValueError as ve:
+        # Это может произойти при int() или date.fromisoformat()
+        return jsonify({'error': f'Неверный формат данных: {str(ve)}'}), 400
+    except Exception as e:
+        return jsonify({'error': f'Ошибка обработки данных: {str(e)}'}), 400
+
+    if errors:
+        return jsonify({'error': 'Ошибка в данных', 'details': errors}), 400
+
+    # --- Создание объекта ---
+    try:
+        # Безопасно обрабатываем строковые поля, учитывая возможность None
+        status_raw = data.get('status')
+        status = status_raw.strip() if status_raw is not None else ''
+        
+        note_raw = data.get('note')
+        # Если note_raw None или пустая строка после strip, записываем None в БД
+        note = note_raw.strip() if note_raw is not None and note_raw.strip() else None
+
+        new_need = Need(
+            department_id=department_id,
+            asset_type_id=asset_type_id,
+            quantity=quantity,
+            reason_date=dt_date.fromisoformat(data['reason_date']),
+            status=status, # Используем обработанную строку
+            note=note      # Используем обработанную строку или None
+        )
+        db.session.add(new_need)
+        db.session.commit()
+        return jsonify(new_need.to_dict()), 201
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Ошибка при создании потребности: {e}")
+        return jsonify({'error': 'Не удалось создать потребность', 'details': str(e)}), 500
+    
+# === Эндпоинт для пакетного удаления потребностей ===
+@app.route('/api/needs/batch-delete', methods=['DELETE'])
+@login_required
+def delete_needs_batch():
+    """
+    Удаляет несколько потребностей по списку ID.
+    Тело запроса: JSON {"ids": [1, 2, 3]}
+    """
+    try:
+        data = request.get_json()
+        if not data or 'ids' not in data:
+            return jsonify({'error': 'Список ID не предоставлен'}), 400
+
+        ids_to_delete = data['ids']
+        if not isinstance(ids_to_delete, list):
+            return jsonify({'error': 'IDs должны быть списком'}), 400
+
+        # Проверка, что все IDs - целые числа
+        try:
+            ids_to_delete = [int(id_) for id_ in ids_to_delete]
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Все ID должны быть целыми числами'}), 400
+
+        if not ids_to_delete:
+             return jsonify({'message': 'Нечего удалять'}), 200
+
+        # Удаление записей
+        deleted_count = Need.query.filter(Need.id.in_(ids_to_delete)).delete(synchronize_session=False)
+        db.session.commit()
+
+        return jsonify({'message': f'Удалено {deleted_count} потребностей'}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Ошибка при пакетном удалении потребностей: {e}")
+        return jsonify({'error': 'Ошибка при удалении потребностей'}), 500
+
+# === Эндпоинт для получения одной потребности по ID ===
+@app.route('/api/needs/<int:id>', methods=['GET'])
+@login_required
+def get_need_by_id(id):
+    """Получить одну потребность по её ID."""
+    try:
+        need = db.session.get(Need, id) # Используем современный метод
+        if not need:
+            return jsonify({'error': 'Потребность не найдена'}), 404
+        
+        return jsonify(need.to_dict()), 200
+    except Exception as e:
+        app.logger.error(f"Ошибка при получении потребности {id}: {e}")
+        return jsonify({'error': 'Ошибка при загрузке данных потребности'}), 500
+
+# === Эндпоинт для обновления одной потребности по ID ===
+@app.route('/api/needs/<int:id>', methods=['PUT'])
+@login_required
+def update_need(id):
+    """Обновить потребность по её ID."""
+    try:
+        need = db.session.get(Need, id) # Используем современный метод
+        if not need:
+            return jsonify({'error': 'Потребность не найдена'}), 404
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Нет данных для обновления'}), 400
+
+        # --- Проверка и обновление полей ---
+        # Поля, которые можно обновить
+        updatable_fields = ['department_id', 'asset_type_id', 'quantity', 'reason_date', 'status', 'note']
+
+        errors = {}
+        for field in updatable_fields:
+            if field in data:
+                try:
+                    if field in ['department_id', 'asset_type_id']:
+                        value = int(data[field]) if data[field] not in (None, '') else None
+                        # Можно добавить проверку существования department/type
+                        # if value and not (Department.query.get(value) if field == 'department_id' else Type.query.get(value)):
+                        #     errors[field] = f'Неверный ID {field}'
+                        setattr(need, field, value)
+                    
+                    elif field == 'quantity':
+                        value = int(data[field])
+                        if value <= 0:
+                            errors['quantity'] = 'Количество должно быть положительным'
+                        else:
+                            setattr(need, field, value)
+                    
+                    elif field == 'reason_date':
+                         if data[field]:
+                             # Ожидаем формат YYYY-MM-DD
+                             setattr(need, field, dt_date.fromisoformat(data[field]))
+                         else:
+                             setattr(need, field, None)
+
+                    elif field in ['status', 'note']:
+                        # Для строковых полей просто присваиваем, обрезая пробелы
+                        value = data[field].strip() if data[field] is not None else ''
+                        if field == 'status' and not value:
+                             errors['status'] = 'Статус не может быть пустым'
+                        else:
+                             setattr(need, field, value if value else None) # note может быть None
+
+                except ValueError as ve:
+                    errors[field] = f'Неверный формат для {field}: {str(ve)}'
+                except Exception as e:
+                    errors[field] = f'Ошибка обработки {field}: {str(e)}'
+
+        if errors:
+            return jsonify({'error': 'Ошибка в данных', 'details': errors}), 400
+
+        # Обновляем дату изменения (если у вас есть такое поле в модели)
+        # need.updated_at = datetime.utcnow() # Пример
+
+        db.session.commit()
+        return jsonify(need.to_dict()), 200
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Ошибка при обновлении потребности {id}: {e}")
+        return jsonify({'error': 'Ошибка при обновлении потребности'}), 500
 
 # --- QR-код ---
 @app.route('/api/qrcodes', methods=['POST'])

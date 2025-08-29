@@ -172,3 +172,26 @@ class Change(db.Model):
 
     def __repr__(self):
         return f"<Change {self.action} ({self.field}) at {self.changed_at}>"
+    
+class Need(db.Model):
+    __tablename__ = 'needs'
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.Date, nullable=False, default=db.func.current_date())
+    department_id = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=False)
+    asset_type_id = db.Column(db.Integer, db.ForeignKey('types.id'), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False)
+    reason_date = db.Column(db.Date, nullable=False)
+    status = db.Column(db.String(255), nullable=False)
+    note = db.Column(db.Text, nullable=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'date': self.date.isoformat() if self.date else None,
+            'department_id': self.department_id,
+            'asset_type_id': self.asset_type_id,
+            'quantity': self.quantity,
+            'reason_date': self.reason_date.isoformat() if self.reason_date else None,
+            'status': self.status,
+            'note': self.note,
+        }

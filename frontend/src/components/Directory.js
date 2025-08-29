@@ -902,7 +902,7 @@ const Directory = ({ currentUser }) => {
                   ))}
                 </Select>
               </FormControl>
-              <Button variant="contained" color="success" onClick={handleAddEmployee} color="success">
+              <Button variant="contained" color="success" onClick={handleAddEmployee}>
                 Добавить
               </Button>
             </Box>
@@ -962,13 +962,6 @@ const Directory = ({ currentUser }) => {
                               <EditIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
-
-                          {/* У сотрудников, вероятно, нет свойств */}
-                          {/* <Tooltip title="Свойства">
-                            <IconButton color="primary" size="small" aria-label="Свойства">
-                              <TuneIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip> */}
 
                           <Tooltip title="Удалить">
                             <IconButton

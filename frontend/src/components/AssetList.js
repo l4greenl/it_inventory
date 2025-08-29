@@ -546,7 +546,7 @@ const AssetList = ({ currentUser }) => {
         'Инвентарный номер': asset.inventory_number || '',
         'Наименование': `${getTypeName(asset.type_id) || ''} ${asset.brand || ''} ${asset.model || ''}`.trim(),
         'Ответственный': getEmployeeName(asset.responsible_person),
-        'Отдел': getDepartmentName(asset.department_id),
+        'Отдел (подразделение)': getDepartmentName(asset.department_id),
         'Помещение': asset.room || ''
       };
 
@@ -783,7 +783,7 @@ const AssetList = ({ currentUser }) => {
                     onClick={() => handleSort('department_id')}
                     sx={{ fontWeight: 'bold' }}
                   >
-                    Отдел
+                    Отдел (подразделение)
                   </TableSortLabel>
                 </TableCell>
                 <TableCell sx={{ fontWeight: 'bold' }}>
