@@ -1,5 +1,4 @@
 // frontend/src/components/EditNeed.js
-
 import React, { useState, useEffect } from 'react';
 import {
   Container,
@@ -20,60 +19,51 @@ import {
   useTheme,
   CircularProgress,
   Alert,
-  // Добавьте другие необходимые импорты, например, FormControl, FormHelperText, если используете валидацию
+  // <<< ДОБАВИЛ Tooltip для подсказки у статуса
+  Tooltip, 
 } from '@mui/material';
 import axios from 'axios';
 import { useNavigate, useParams } from 'react-router-dom';
 import { API_BASE_URL } from '../config';
 
-// ... (другие импорты, если есть, например, для иконок)
-
 const EditNeed = ({ currentUser }) => {
   const navigate = useNavigate();
-  const { id } = useParams(); // Получаем ID из URL
+  const { id } = useParams();
   const theme = useTheme();
 
-  // --- Состояния ---
   const [need, setNeed] = useState({
-    date: '', // Дата создания (обычно не редактируется)
+    date: '',
     department_id: '',
     asset_type_id: '',
     quantity: '',
-    reason_date: '', // Дата основания
+    reason_date: '',
     status: '',
     note: '',
-    // inventory_number, serial_number и другие поля из Asset не используются в Need
   });
 
   const [departments, setDepartments] = useState([]);
-  const [types, setTypes] = useState([]); // asset_types
-  // const [statuses, setStatuses] = useState([]); // Если список статусов загружается отдельно
-
-  const [errors, setErrors] = useState({});
+  const [types, setTypes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [saveLoading, setSaveLoading] = useState(false); // Для отслеживания состояния сохранения
-  const [fetchError, setFetchError] = useState(''); // Ошибка загрузки данных
-
-  // --- Состояния для модального окна удаления ---
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [fetchError, setFetchError] = useState('');
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
-  const [deleteError, setDeleteError] = useState(''); // Ошибка при удалении
+  const [deleteError, setDeleteError] = useState('');
 
-  // --- Загрузка данных ---
+  // <<< ДОБАВИЛ: Состояния для валидации
+  const [touched, setTouched] = useState({});
+  const [errors, setErrors] = useState({});
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       setFetchError('');
       setDeleteError('');
       try {
-        // Загружаем справочники
-        const [deptsRes, typesRes /*, statusesRes */] = await Promise.all([
+        const [deptsRes, typesRes, needRes] = await Promise.all([
           axios.get(`${API_BASE_URL}/api/departments`, { withCredentials: true }),
-          axios.get(`${API_BASE_URL}/api/types`, { withCredentials: true }), // Или отдельный эндпоинт для типов потребностей
-          // axios.get(`${API_BASE_URL}/api/statuses`, { withCredentials: true }), // Если статусы отдельно
+          axios.get(`${API_BASE_URL}/api/types`, { withCredentials: true }),
+          axios.get(`${API_BASE_URL}/api/needs/${id}`, { withCredentials: true }),
         ]);
-
-        // Загружаем конкретную потребность
-        const needRes = await axios.get(`${API_BASE_URL}/api/needs/${id}`, { withCredentials: true });
 
         const sortedDepts = deptsRes.data.sort((a, b) =>
           a.name.localeCompare(b.name, 'ru')
@@ -81,23 +71,18 @@ const EditNeed = ({ currentUser }) => {
         const sortedTypes = typesRes.data.sort((a, b) =>
           a.name.localeCompare(b.name, 'ru')
         );
-        // const availableStatuses = statusesRes.data; // Если загружаете статусы
 
         setDepartments(sortedDepts);
         setTypes(sortedTypes);
-        // setStatuses(availableStatuses); // Если используете
-
-        // Устанавливаем данные в форму
         setNeed({
           date: needRes.data.date || '',
           department_id: needRes.data.department_id || '',
           asset_type_id: needRes.data.asset_type_id || '',
           quantity: needRes.data.quantity || '',
-          reason_date: needRes.data.reason_date || '', // Формат YYYY-MM-DD
+          reason_date: needRes.data.reason_date || '',
           status: needRes.data.status || '',
           note: needRes.data.note || '',
         });
-
       } catch (error) {
         console.error('Ошибка загрузки данных:', error);
         if (error.response) {
@@ -115,52 +100,84 @@ const EditNeed = ({ currentUser }) => {
     };
 
     fetchData();
-  }, [id]); // Зависимость от id
+  }, [id]);
 
-  // --- Обработчики ---
+  // <<< ДОБАВИЛ: Функция для проверки валидности конкретного поля
+  const validateField = (name, value) => {
+    switch (name) {
+      case 'department_id':
+        return value ? '' : 'Обязательное поле';
+      case 'asset_type_id':
+        return value ? '' : 'Обязательное поле';
+      case 'quantity':
+        const numValue = parseInt(value, 10);
+        return (!isNaN(numValue) && numValue > 0) ? '' : 'Введите положительное число';
+      case 'reason_date':
+        return value ? '' : 'Обязательное поле';
+      case 'status':
+        return value && value.trim() ? '' : 'Обязательное поле';
+      default:
+        return '';
+    }
+  };
+
+  // <<< ДОБАВИЛ: Функция для проверки всей формы
+  const validateForm = () => {
+    const newErrors = {};
+    Object.keys(need).forEach(key => {
+      // Проверяем только обязательные поля или поля, которые уже имеют ошибки
+      if (['department_id', 'asset_type_id', 'quantity', 'reason_date', 'status'].includes(key) || errors[key]) {
+        newErrors[key] = validateField(key, need[key]);
+      }
+    });
+    return newErrors;
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setNeed((prev) => ({ ...prev, [name]: value }));
 
-    // Очистка ошибок при изменении поля
-    if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: '' }));
+    // <<< ДОБАВИЛ: Отмечаем поле как "touched" при изменении
+    setTouched((prev) => ({ ...prev, [name]: true }));
+
+    // <<< ДОБАВИЛ: Валидируем поле при изменении, если оно уже было "touched"
+    if (touched[name] || errors[name]) {
+        const error = validateField(name, value);
+        setErrors((prev) => ({ ...prev, [name]: error }));
     }
   };
 
-  // --- Валидация формы ---
-  const validateForm = () => {
-    const newErrors = {};
-    // Примеры обязательных полей (адаптируйте под свои правила)
-    if (!need.department_id) newErrors.department_id = 'Обязательное поле';
-    if (!need.asset_type_id) newErrors.asset_type_id = 'Обязательное поле';
-    if (!need.quantity || parseInt(need.quantity, 10) <= 0) newErrors.quantity = 'Введите положительное число';
-    if (!need.reason_date) newErrors.reason_date = 'Обязательное поле';
-    if (!need.status?.trim()) newErrors.status = 'Обязательное поле';
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  // --- Сохранение изменений ---
   const handleSave = async (e) => {
-    e.preventDefault(); // Предотвращает перезагрузку страницы, если форма обернута в <form>
+    e.preventDefault();
 
-    if (!validateForm()) {
-      return;
+    // <<< ДОБАВИЛ: Помечаем все обязательные поля как "touched" при попытке отправки
+    const allTouched = { ...touched };
+    ['department_id', 'asset_type_id', 'quantity', 'reason_date', 'status'].forEach(key => {
+      allTouched[key] = true;
+    });
+    setTouched(allTouched);
+
+    // <<< ДОБАВИЛ: Проводим валидацию
+    const formErrors = validateForm();
+    setErrors(formErrors);
+
+    // <<< ДОБАВИЛ: Проверяем, есть ли ошибки
+    const hasErrors = Object.values(formErrors).some(error => error !== '');
+    if (hasErrors) {
+        // Не отправляем форму, если есть ошибки
+        return; 
     }
 
     setSaveLoading(true);
-    setDeleteError(''); // Очищаем ошибку удаления перед сохранением
+    setDeleteError('');
 
-    // Подготавливаем данные для отправки
     const dataToSend = {
       department_id: parseInt(need.department_id, 10),
       asset_type_id: parseInt(need.asset_type_id, 10),
       quantity: parseInt(need.quantity, 10),
-      reason_date: need.reason_date, // Дата в формате YYYY-MM-DD
+      reason_date: need.reason_date,
       status: need.status.trim(),
-      note: need.note.trim() || null, // Примечание может быть null
+      note: need.note.trim() || null,
     };
 
     try {
@@ -173,29 +190,20 @@ const EditNeed = ({ currentUser }) => {
 
       if (response.status === 200) {
         alert('Потребность успешно обновлена!');
-        // После успешного сохранения можно перенаправить на список
         navigate('/needs');
-        // Или обновить локальное состояние, если остаетесь на странице
-        // setNeed(response.data); // Если response.data содержит обновленный объект
       }
     } catch (error) {
       console.error('Ошибка при обновлении потребности:', error);
       if (error.response) {
         if (error.response.status === 400) {
-          // Ошибки валидации данных
-          if (error.response.data.details) {
-            // Предполагаем, что details - это объект { field: "message" }
-            setErrors(error.response.data.details);
-          } else {
-            alert(`Ошибка в данных: ${error.response.data.error || 'Проверьте правильность заполнения формы.'}`);
-          }
+          alert(`Ошибка в данных: ${error.response.data.error || 'Проверьте правильность заполнения формы.'}`);
         } else if (error.response.status === 401) {
           alert('Ошибка авторизации. Пожалуйста, войдите в систему.');
         } else if (error.response.status === 403) {
           alert('Доступ запрещен.');
         } else if (error.response.status === 404) {
           alert('Потребность не найдена.');
-          navigate('/needs'); // Перенаправляем, если не найдена
+          navigate('/needs');
         } else if (error.response.status === 500) {
           alert('Внутренняя ошибка сервера. Пожалуйста, попробуйте позже.');
         } else {
@@ -211,14 +219,13 @@ const EditNeed = ({ currentUser }) => {
     }
   };
 
-  // --- Удаление потребности ---
   const handleOpenDeleteDialog = () => {
     setOpenDeleteDialog(true);
   };
 
   const handleCloseDeleteDialog = () => {
     setOpenDeleteDialog(false);
-    setDeleteError(''); // Очищаем ошибку при закрытии
+    setDeleteError('');
   };
 
   const handleDelete = async () => {
@@ -229,7 +236,6 @@ const EditNeed = ({ currentUser }) => {
 
       if (response.status === 200) {
         alert('Потребность успешно удалена!');
-        // Перенаправляем на список после удаления
         navigate('/needs');
       }
     } catch (error) {
@@ -237,36 +243,33 @@ const EditNeed = ({ currentUser }) => {
       if (error.response) {
         if (error.response.status === 401) {
           alert('Ошибка авторизации.');
-          handleCloseDeleteDialog(); // Закрываем диалог
+          handleCloseDeleteDialog();
         } else if (error.response.status === 403) {
           alert('Доступ запрещен.');
           handleCloseDeleteDialog();
         } else if (error.response.status === 404) {
             alert('Потребность не найдена.');
             handleCloseDeleteDialog();
-            navigate('/needs'); // Перенаправляем, если не найдена
+            navigate('/needs');
         } else if (error.response.status === 500) {
-          setDeleteError('Внутренняя ошибка сервера при удалении.'); // Показываем в диалоге
+          setDeleteError('Внутренняя ошибка сервера при удалении.');
         } else {
-          setDeleteError(`Ошибка сервера: ${error.response.status}`); // Показываем в диалоге
+          setDeleteError(`Ошибка сервера: ${error.response.status}`);
         }
       } else if (error.request) {
-        setDeleteError('Ошибка сети. Проверьте подключение.'); // Показываем в диалоге
+        setDeleteError('Ошибка сети. Проверьте подключение.');
       } else {
-        setDeleteError(`Ошибка: ${error.message}`); // Показываем в диалоге
+        setDeleteError(`Ошибка: ${error.message}`);
       }
     }
-    // Не закрываем диалог автоматически при ошибке, чтобы пользователь увидел сообщение
   };
 
-
-  // --- Навигация назад ---
-  const handleGoBack = () => {
-    // Можно добавить проверку на несохраненные изменения, если нужно
-    navigate('/needs');
+  // <<< ДОБАВИЛ: Функция для определения, должно ли поле быть выделено как ошибочное
+  const isError = (fieldName) => {
+    // Поле считается ошибочным, если оно было "touched" и валидация показала ошибку
+    return touched[fieldName] && !!errors[fieldName];
   };
 
-  // --- Отображение ---
   if (loading) return (
     <Container maxWidth="md" sx={{ mt: 3, textAlign: 'center' }}>
       <CircularProgress />
@@ -278,39 +281,41 @@ const EditNeed = ({ currentUser }) => {
     <Container maxWidth="md" sx={{ mt: 3 }}>
       <Alert severity="error">{fetchError}</Alert>
       <Box sx={{ mt: 2 }}>
-        <Button variant="outlined" onClick={handleGoBack}>
+        <Button variant="outlined" onClick={() => navigate('/needs')}>
           Назад к списку
         </Button>
       </Box>
     </Container>
   );
 
-
   return (
     <Container maxWidth="md">
-      <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-        <Typography variant="h5" gutterBottom>Редактирование потребности</Typography>
-        
-      {/* Форма редактирования */}
+      <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 3 }}>
+        <Typography variant="h5" gutterBottom>Редактировать потребность</Typography>
+      </Box>
 
+      <Box
+        component="form"
+        onSubmit={handleSave}
+      >
         <Grid container spacing={2}>
-          {/* Отдел (подразделение) - Обязательное */}
           <Grid item xs={12} sm={6}>
             <FormControl
               fullWidth
               margin="normal"
-              sx={{ mb: -1 }}
-              error={!!errors.department_id}
-              required
+              // <<< ИЗМЕНЕНО: error определяется функцией isError
+              error={isError('department_id')}
             >
-              <InputLabel id="department-label">Отдел (подразделение)</InputLabel>
+              <InputLabel id="department-label">Отдел (подразделение) *</InputLabel>
               <Select
                 labelId="department-label"
                 name="department_id"
                 value={need.department_id}
                 onChange={handleChange}
-                label="Отдел (подразделение)"
+                label="Отдел (подразделение) *"
                 disabled={!currentUser || currentUser.role !== 'admin'}
+                // <<< ДОБАВИЛ: Визуальное выделение ошибки через sx
+                sx={isError('department_id') ? { '& .MuiOutlinedInput-notchedOutline': { borderColor: 'error.main' } } : {mb: -2}}
               >
                 {departments.map((dept) => (
                   <MenuItem key={dept.id} value={dept.id}>
@@ -318,31 +323,24 @@ const EditNeed = ({ currentUser }) => {
                   </MenuItem>
                 ))}
               </Select>
-              {errors.department_id && (
-                <Typography variant="caption" color="error">
-                  {errors.department_id}
-                </Typography>
-              )}
             </FormControl>
           </Grid>
 
-          {/* Наименование потребности (Тип устройства) - Обязательное */}
           <Grid item xs={12} sm={6}>
             <FormControl
               fullWidth
               margin="normal"
-              sx={{ mb: -1 }}
-              error={!!errors.asset_type_id}
-              required
+              error={isError('asset_type_id')}
             >
-              <InputLabel id="asset-type-label">Наименование потребности</InputLabel>
+              <InputLabel id="asset-type-label">Наименование потребности *</InputLabel>
               <Select
                 labelId="asset-type-label"
                 name="asset_type_id"
                 value={need.asset_type_id}
                 onChange={handleChange}
-                label="Наименование потребности"
+                label="Наименование потребности *"
                 disabled={!currentUser || currentUser.role !== 'admin'}
+                sx={isError('asset_type_id') ? { '& .MuiOutlinedInput-notchedOutline': { borderColor: 'error.main' } } : {mb: -2}}
               >
                 {types.map((type) => (
                   <MenuItem key={type.id} value={type.id}>
@@ -350,72 +348,64 @@ const EditNeed = ({ currentUser }) => {
                   </MenuItem>
                 ))}
               </Select>
-              {errors.asset_type_id && (
-                <Typography variant="caption" color="error">
-                  {errors.asset_type_id}
-                </Typography>
-              )}
             </FormControl>
           </Grid>
 
-          {/* Количество - Обязательное */}
           <Grid item xs={12} sm={6}>
             <TextField
-              label="Количество"
+              label="Количество *"
               name="quantity"
               type="number"
               value={need.quantity}
               onChange={handleChange}
               fullWidth
               margin="normal"
-              sx={{ mb: -1 }}
-              error={!!errors.quantity}
-              helperText={errors.quantity}
-              required
+              error={isError('quantity')}
               inputProps={{ min: "1", step: "1" }}
-              disabled={!currentUser || currentUser.role !== 'admin'}
+              sx={isError('quantity') ? { '& .MuiOutlinedInput-notchedOutline': { borderColor: 'error.main' } } : {mb: -1}}
             />
           </Grid>
 
-          {/* Основание (Дата) - Обязательное */}
           <Grid item xs={12} sm={6}>
             <TextField
-              label="Дата основания"
+              label="Дата основания *"
               name="reason_date"
               type="date"
               value={need.reason_date}
               onChange={handleChange}
               fullWidth
               margin="normal"
-              sx={{ mb: -1 }}
-              error={!!errors.reason_date}
-              helperText={errors.reason_date}
-              required
+              error={isError('reason_date')}
               InputLabelProps={{
                 shrink: true,
               }}
               disabled={!currentUser || currentUser.role !== 'admin'}
+              sx={isError('reason_date') ? { '& .MuiOutlinedInput-notchedOutline': { borderColor: 'error.main' } } : {mb: -1}}
+              InputProps={{
+                inputProps: {
+                  min: "1000-01-01",
+                  max: "9999-12-31"
+                }
+              }}
             />
           </Grid>
 
-          {/* Статус - Обязательное */}
           <Grid item xs={12}>
-            <TextField
-              label="Статус"
-              name="status"
-              value={need.status}
-              onChange={handleChange}
-              fullWidth
-              margin="normal"
-              sx={{ mb: -1 }}
-              error={!!errors.status}
-              helperText={errors.status}
-              required
-              disabled={!currentUser || currentUser.role !== 'admin'}
-            />
+            <Tooltip title='Например: "В работе"' arrow>
+              <TextField
+                label="Статус *"
+                name="status"
+                value={need.status}
+                onChange={handleChange}
+                fullWidth
+                margin="normal"
+                error={isError('status')}
+                disabled={!currentUser || currentUser.role !== 'admin'}
+                sx={isError('status') ? { '& .MuiOutlinedInput-notchedOutline': { borderColor: 'error.main' } } : {mb: -1}}
+              />
+            </Tooltip>
           </Grid>
 
-          {/* Примечание */}
           <Grid item xs={12}>
             <TextField
               label="Примечание"
@@ -424,42 +414,35 @@ const EditNeed = ({ currentUser }) => {
               onChange={handleChange}
               fullWidth
               margin="normal"
-              sx={{ mb: -1 }}
               multiline
               rows={3}
               disabled={!currentUser || currentUser.role !== 'admin'}
             />
           </Grid>
         </Grid>
-      </Box>
-        {/* <<<--- ИЗМЕНЕНО: Кнопки действий внизу, аналогично AssetDetails --- */}
-        <Box mt={4.5} display="flex" justifyContent="space-between" alignItems="center">
-          {/* Кнопка "Назад" */}
-          <Button onClick={handleGoBack} variant="outlined">
+
+        <Box mt={1.5} mb={2} display="flex" justifyContent="space-between" alignItems="center">
+          <Button onClick={() => navigate('/needs')} variant="outlined">
             Назад
           </Button>
 
-          {/* Кнопки "Удалить" и "Сохранить" для администратора */}
           <Box>
             {currentUser && currentUser.role === 'admin' && (
               <>
-                {/* Кнопка "Удалить" */}
                 <Button
                   variant="contained"
                   color="error"
-                  onClick={handleOpenDeleteDialog} // Открывает модальное окно
-                  disabled={!currentUser || currentUser.role !== 'admin' || saveLoading} // Блокировка во время сохранения
+                  onClick={handleOpenDeleteDialog}
+                  disabled={!currentUser || currentUser.role !== 'admin' || saveLoading}
                   sx={{ mr: '16px' }}
                 >
                   Удалить
                 </Button>
 
-                {/* Кнопка "Сохранить" */}
                 <Button
-                  type="submit" // Тип submit для формы
+                  type="submit"
                   variant="contained"
                   color="success"
-                  // onClick={handleSave} // Не нужен, так как обработчик на form onSubmit
                   disabled={!currentUser || currentUser.role !== 'admin' || saveLoading}
                 >
                   {saveLoading ? <CircularProgress size={24} /> : 'Сохранить'}
@@ -468,9 +451,8 @@ const EditNeed = ({ currentUser }) => {
             )}
           </Box>
         </Box>
-        {/* --- КОНЕЦ ИЗМЕНЕНИЙ --- */}
+      </Box>
 
-      {/* <<<--- ИЗМЕНЕНО: Модальное окно подтверждения удаления --- */}
       <Dialog
         open={openDeleteDialog}
         onClose={handleCloseDeleteDialog}
@@ -483,7 +465,6 @@ const EditNeed = ({ currentUser }) => {
             Вы уверены, что хотите удалить эту потребность?
             Это действие нельзя отменить.
           </DialogContentText>
-          {/* Отображение ошибки удаления внутри диалога */}
           {deleteError && (
             <Alert severity="error" style={{ marginTop: '10px' }}>
               {deleteError}
@@ -491,22 +472,14 @@ const EditNeed = ({ currentUser }) => {
           )}
         </DialogContent>
         <DialogActions>
-          {/* Кнопка "Отмена" в диалоге */}
           <Button onClick={handleCloseDeleteDialog} color="primary" disabled={saveLoading}>
             Отмена
           </Button>
-          {/* Кнопка "Удалить" в диалоге */}
-          <Button
-            onClick={handleDelete}
-            color="error"
-            autoFocus
-            disabled={saveLoading}
-          >
+          <Button onClick={handleDelete} color="error" autoFocus disabled={saveLoading}>
             Удалить
           </Button>
         </DialogActions>
       </Dialog>
-      {/* --- КОНЕЦ ИЗМЕНЕНИЙ --- */}
     </Container>
   );
 };

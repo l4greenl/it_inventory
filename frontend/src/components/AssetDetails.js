@@ -20,6 +20,7 @@ import {
   Select,
   MenuItem,
   FormHelperText,
+  Tooltip,
 } from '@mui/material';
 import axios from 'axios';
 import { API_BASE_URL } from '../config'; // Импорт базового URL
@@ -68,6 +69,9 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
   // Исправлено: dynamicFields должен быть массивом
   const [dynamicFields, setDynamicFields] = useState([]);
   const [typeProperties, setTypeProperties] = useState([]);
+  // <<< ДОБАВИЛ: Состояния для валидации
+  const [touched, setTouched] = useState({});
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // Загрузка данных актива и справочников
   useEffect(() => {
@@ -354,8 +358,13 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
           }
         }
       }
-      // <<<--- КОНЕЦ НОВОГО --- >>>
+      setTouched(prevTouched => ({ ...prevTouched, [name]: true }));
 
+      // <<< ДОБАВИЛ: Валидируем поле при изменении, если оно уже было "touched" или имело ошибку
+      if (touched[name] || fieldErrors[name]) {
+        const error = validateField(name, value);
+        setFieldErrors(prevErrors => ({ ...prevErrors, [name]: error }));
+      }
       // Очищаем ошибку для этого поля, если она была
       if (errors[name]) {
         setErrors(prevErrors => ({ ...prevErrors, [name]: '' }));
@@ -365,28 +374,28 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
     });
   };
 
+  const isFieldError = (fieldName) => {
+    return touched[fieldName] && !!fieldErrors[fieldName]; // Или errors[fieldName]
+  };
+
   // Обработчик сохранения изменений
   const handleSave = async () => {
-    // --- Проверка обязательных полей ---
-    const newErrors = {};
-    if (!asset.inventory_number) newErrors.inventory_number = 'Обязательное поле';
-    if (!asset.type_id) newErrors.type_id = 'Обязательное поле';
-    if (!asset.status_id) newErrors.status_id = 'Обязательное поле';
-    if (!asset.responsible_person) newErrors.responsible_person = 'Обязательное поле';
-    // department_id теперь заполняется автоматически, но можно оставить проверку
-    if (!asset.department_id) newErrors.department_id = 'Обязательное поле (должен быть ответственный)';
-    if (!asset.purchase_date) newErrors.purchase_date = 'Обязательное поле';
+    const requiredFields = ['inventory_number', 'type_id', 'status_id', 'responsible_person', 'department_id', 'purchase_date'];
+    const allTouched = { ...touched };
+    requiredFields.forEach(field => {
+      allTouched[field] = true;
+    });
+    setTouched(allTouched);
 
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      alert('Пожалуйста, заполните все обязательные поля');
-      return; // Прерываем сохранение, если есть ошибки
+    const formErrors = validateForm();
+    setFieldErrors(formErrors);
+
+    const hasErrors = Object.values(formErrors).some(error => error !== '');
+    if (hasErrors) {
+        return;
     }
-    // --- Конец проверки ---
 
     try {
-      // --- Подготовка данных для отправки ---
-      // 1. Начинаем с основных полей из asset
       const dataToSend = {
         serial_number: asset.serial_number || '',
         inventory_number: asset.inventory_number || '',
@@ -402,14 +411,11 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
         comments: asset.comments || '',
       };
 
-      // 2. Добавляем динамические поля из dynamicFields
-      // Предполагается, что dynamicFields - это массив объектов {id, name, fieldName, value}
       dynamicFields.forEach(fieldObj => {
         dataToSend[fieldObj.fieldName] = fieldObj.value;
       });
 
       console.log("Отправляемые данные (dataToSend):", dataToSend);
-      // --- Конец подготовки ---
 
       const response = await axios.put(
         `${API_BASE_URL}/api/assets/${id}`,
@@ -418,16 +424,11 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
       );
 
       alert('Данные успешно обновлены');
-      // Обновляем основной объект asset данными из ответа сервера
-      // Это важно, чтобы синхронизировать локальное состояние с сервером
       setAsset(response.data);
-      // Также обновляем dynamicFields, если сервер вернул новые значения
-      // или если структура полей осталась та же
-      // Для простоты, можно перезагрузить свойства типа
-      // или обновить dynamicFields вручную, если это критично
-      
-      // Сбрасываем ошибки
       setErrors({});
+      setFieldErrors({});
+      setTouched({});
+      setIsEditing(false);
 
     } catch (err) {
       console.error('Ошибка при сохранении изменений:', err);
@@ -468,6 +469,45 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
       </Grid>
     );
   };
+  // <<< ДОБАВИЛ: Функция для проверки валидности конкретного поля
+  const validateField = (name, value) => {
+    // Определяем обязательные поля
+    const requiredFields = ['inventory_number', 'type_id', 'status_id', 'responsible_person', 'department_id', 'purchase_date'];
+    if (requiredFields.includes(name)) {
+      // Для department_id проверяем, что оно не null/undefined/пустая строка
+      // Остальные поля проверяются на пустоту
+      if (name === 'department_id') {
+        return (value !== null && value !== undefined && value !== '') ? '' : 'Обязательное поле';
+      } else if (name === 'purchase_date') {
+         // Дата может быть объектом Date или строкой
+         return (value !== null && value !== undefined && value !== '') ? '' : 'Обязательное поле';
+      } else {
+        // Для строковых полей проверяем trim
+        return (value && typeof value === 'string' && value.trim() !== '') ? '' : 'Обязательное поле';
+      }
+    }
+    // Для необязательных полей или уже заполненных ошибочных возвращаем пустую строку
+    return '';
+  };
+  // <<< ДОБАВИЛ: Функция для проверки всей формы
+  const validateForm = () => {
+    const newErrors = {};
+    const requiredFields = ['inventory_number', 'type_id', 'status_id', 'responsible_person', 'department_id', 'purchase_date'];
+    
+    requiredFields.forEach(field => {
+      let value;
+      if (field === 'department_id' || field === 'responsible_person') {
+        value = asset[field];
+      } else if (field === 'purchase_date') {
+         value = asset[field];
+      } else {
+        value = asset[field];
+      }
+      newErrors[field] = validateField(field, value);
+    });
+    return newErrors;
+  };
+
 
   // Условный рендеринг состояний загрузки/ошибки/отсутствия данных
   if (loading) return (
@@ -489,7 +529,7 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
 
   return (
     <Container maxWidth="md">
-      <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+      <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 3 }}>
         <Typography variant="h5" gutterBottom> {types.find(t => t.id === (isEditing ? editedAsset.type_id : asset.type_id))?.name || 'Без типа'} {isEditing ? editedAsset.brand : asset.brand} {isEditing ? editedAsset.model : asset.model} </Typography>
 
         <Grid container spacing={2}>
@@ -498,7 +538,7 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
             <TextField
               label="Серийный номер"
               name="serial_number"
-              value={isEditing ? editedAsset.serial_number : asset.serial_number || ''}
+              value={asset.serial_number || ''}
               onChange={handleChange}
               fullWidth
               margin="normal"
@@ -510,28 +550,34 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
             <TextField
               label="Инвентарный номер *"
               name="inventory_number"
-              value={isEditing ? editedAsset.inventory_number : asset.inventory_number}
+              value={asset.inventory_number || ''}
               onChange={handleChange}
               fullWidth
               margin="normal"
-              sx={{ mb: -1 }}
-              error={!!(isEditing ? editErrors.inventory_number : null)}
-              helperText={isEditing ? editErrors.inventory_number : null}
+              sx={{ mb: -1,
+                ...(!isEditing ? {} : {}),
+                ...(isFieldError('inventory_number') ? { '& .MuiOutlinedInput-notchedOutline': { borderColor: 'error.main' } } : {})
+              }}
               disabled={!currentUser || currentUser.role !== 'admin'}
             />
           </Grid>
 
           {/* Пара 2: Тип устройства | Производитель */}
           <Grid item xs={12} sm={6}>
-            <FormControl fullWidth margin="normal" error={!!(isEditing ? editErrors.type_id : null)}>
+            <FormControl 
+              fullWidth 
+              margin="normal" 
+              error={isFieldError('type_id')}
+              sx={{ mb: -2 }}
+            >
               <InputLabel id="edit-type-label">Тип устройства *</InputLabel>
               <Select
                 labelId="edit-type-label"
                 label="Тип устройства *"
                 name="type_id"
-                value={isEditing ? editedAsset.type_id : asset.type_id}
+                value={asset.type_id || ''}
                 onChange={handleTypeChange}
-                sx={{ mb: -1 }}
+                sx={{ mb: -2 }}
                 disabled={!currentUser || currentUser.role !== 'admin'}
               >
                 {types.map(type => (
@@ -540,16 +586,13 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
                   </MenuItem>
                 ))}
               </Select>
-              {isEditing && editErrors.type_id && (
-                <FormHelperText>{editErrors.type_id}</FormHelperText>
-              )}
             </FormControl>
           </Grid>
           <Grid item xs={12} sm={6}>
             <TextField
               label="Производитель"
               name="brand"
-              value={isEditing ? editedAsset.brand : asset.brand}
+              value={asset.brand || ''}
               onChange={handleChange}
               fullWidth
               margin="normal"
@@ -563,7 +606,7 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
             <TextField
               label="Модель"
               name="model"
-              value={isEditing ? editedAsset.model : asset.model}
+              value={asset.model || ''}
               onChange={handleChange}
               fullWidth
               margin="normal"
@@ -576,15 +619,19 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
 
           {/* Статус | Фактический пользователь */}
           <Grid item xs={12} sm={6}>
-            <FormControl fullWidth margin="normal" error={!!(isEditing ? editErrors.status_id : null)}>
+            <FormControl 
+              fullWidth 
+              margin="normal" 
+              error={isFieldError('status_id')}
+            >
               <InputLabel id="edit-status-label">Статус *</InputLabel>
               <Select
                 labelId="edit-status-label"
                 label="Статус *"
                 name="status_id"
-                value={isEditing ? editedAsset.status_id : asset.status_id}
+                value={asset.status_id || ''}
                 onChange={handleChange}
-                sx={{ mb: -1 }}
+                sx={{ mb: -2 }}
                 disabled={!currentUser || currentUser.role !== 'admin'}
               >
                 {statuses.map(stat => (
@@ -593,13 +640,10 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
                   </MenuItem>
                 ))}
               </Select>
-              {isEditing && editErrors.status_id && (
-                <FormHelperText>{editErrors.status_id}</FormHelperText>
-              )}
             </FormControl>
           </Grid>
           <Grid item xs={12} sm={6}>
-            <FormControl fullWidth margin="normal" sx={{ mb: -1 }}>
+            <FormControl fullWidth margin="normal">
               <InputLabel id="actual-user-label">Фактический пользователь</InputLabel>
               <Select
                 labelId="actual-user-label"
@@ -607,7 +651,7 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
                 name="actual_user"
                 value={asset.actual_user || ''}
                 onChange={handleChange}
-                sx={{ mb: 0 }}
+                sx={{ mb: -2 }}
                 disabled={!currentUser || currentUser.role !== 'admin'}
 
               >
@@ -622,15 +666,19 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
 
           {/* Ответственный | Отдел (подразделение) - ВСЕГДА СЕРЫЙ и ОТКЛЮЧЕННЫЙ */}
           <Grid item xs={12} sm={6}>
-            <FormControl fullWidth margin="normal" error={!!(isEditing ? editErrors.responsible_person : null)}>
+            <FormControl 
+              fullWidth 
+              margin="normal" 
+              error={isFieldError('responsible_person')} // <<< ИЗМЕНЕНО: Используем новую систему ошибок
+            >
               <InputLabel id="edit-responsible-person-label">Ответственный *</InputLabel>
               <Select
                 labelId="edit-responsible-person-label"
                 label="Ответственный *"
                 name="responsible_person"
-                value={isEditing ? editedAsset.responsible_person : asset.responsible_person}
+                value={asset.responsible_person || ''}
                 onChange={handleChange}
-                sx={{ mb: -1 }}
+                sx={{ mb: -2 }}
                 disabled={!currentUser || currentUser.role !== 'admin'}
               >
                 {employees.map(emp => (
@@ -639,21 +687,20 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
                   </MenuItem>
                 ))}
               </Select>
-              {isEditing && editErrors.responsible_person && (
-                <FormHelperText>{editErrors.responsible_person}</FormHelperText>
-              )}
             </FormControl>
           </Grid>
           <Grid item xs={12} sm={6}>
-            <FormControl fullWidth margin="normal">
+            <FormControl 
+              fullWidth 
+              margin="normal"
+              error={isFieldError('department_id')} // <<< ИЗМЕНЕНО: Используем новую систему ошибок
+            >
               <InputLabel id="edit-department-label">Отдел (подразделение)</InputLabel>
               <Select
                 labelId="edit-department-label"
                 label="Отдел (подразделение)"
                 name="department_id"
-                value={isEditing ? editedAsset.department_id : asset.department_id || ''}
-                onChange={handleChange}
-                // ВАЖНО: Всегда disabled и всегда с серым стилем
+                value={asset.department_id || ''}
                 disabled
                 style={{
                   backgroundColor: '#f5f5f5', // Серый фон
@@ -661,7 +708,7 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
                   cursor: 'not-allowed' // Курсор "запрещено"
                 }}
                 sx={{
-                  mb: -1,
+                  mb: -2,
                   '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0, 0, 0, 0.23)' },
                   '& .MuiSelect-select': { color: 'rgba(0, 0, 0, 0.87)' }
                 }}
@@ -680,7 +727,7 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
             <TextField
               label="Помещение"
               name="room"
-              value={isEditing ? editedAsset.room : asset.room}
+              value={asset.room || ''}
               onChange={handleChange}
               fullWidth
               margin="normal"
@@ -693,15 +740,23 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
               label="Дата покупки *"
               name="purchase_date"
               type="date"
-              value={isEditing ? editedAsset.purchase_date : asset.purchase_date}
+              value={asset.purchase_date ? new Date(asset.purchase_date).toISOString().split('T')[0] : ''}
               onChange={handleChange}
               fullWidth
               margin="normal"
-              sx={{ mb: -1 }}
-              error={!!(isEditing ? editErrors.purchase_date : null)}
-              helperText={isEditing ? editErrors.purchase_date : null}
+              sx={{
+                ...(isFieldError('purchase_date') ? { '& .MuiOutlinedInput-notchedOutline': { borderColor: 'error.main' } } : {}),
+                mb: -1
+              }}
+              error={isFieldError('purchase_date')}
               InputLabelProps={{
                 shrink: true,
+              }}
+              InputProps={{
+                inputProps: {
+                  min: "1000-01-01",
+                  max: "9999-12-31"
+                }
               }}
               disabled={!currentUser || currentUser.role !== 'admin'}
             />
@@ -712,7 +767,7 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
             <TextField
               label="Комментарий"
               name="comments"
-              value={isEditing ? editedAsset.comments : asset.comments}
+              value={asset.comments || ''}
               onChange={handleChange}
               fullWidth
               multiline

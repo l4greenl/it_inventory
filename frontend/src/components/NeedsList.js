@@ -13,9 +13,7 @@ import {
   TableRow,
   Paper,
   Box,
-  IconButton,
   TableSortLabel,
-  Tooltip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -25,18 +23,12 @@ import {
   Snackbar,
   CircularProgress,
   Checkbox, // <<< ДОБАВИЛ: Импорт Checkbox
-  Select,   // <<< ДОБАВИЛ: Импорт Select для модального окна
-  MenuItem, // <<< ДОБАВИЛ: Импорт MenuItem для Select
-  FormControl, // <<< ДОБАВИЛ: Импорт FormControl
-  InputLabel,  // <<< ДОБАВИЛ: Импорт InputLabel
-  useTheme,    // <<< ДОБАВИЛ: Импорт useTheme для стилей
+  TablePagination,
+  useTheme
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
-import AddIcon from '@mui/icons-material/Add';    // Импорт иконки для кнопки Добавить
-import EditIcon from '@mui/icons-material/Edit';   // Импорт иконки для кнопки Изменить
-import DeleteIcon from '@mui/icons-material/Delete'; // Импорт иконки для кнопки Удалить
 
 // Предполагаемая функция для получения названия отдела по ID
 const getDepartmentName = (deptId, departments) => {
@@ -83,6 +75,9 @@ const NeedsList = ({ currentUser }) => {
 
   // <<< ДОБАВИЛ: Состояния для модального окна подтверждения удаления
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25); // Начальное значение, например, 25
 
   const handleNavigationWithCheck = (path) => {
   if (selectedNeeds.length > 0) {
@@ -229,7 +224,6 @@ const NeedsList = ({ currentUser }) => {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  // <<< ДОБАВИЛ: Обработчики для множественного выбора
   const handleSelectAllClick = (event) => {
     if (event.target.checked) {
       const newSelected = filteredNeeds.map((need) => need.id);
@@ -259,6 +253,21 @@ const NeedsList = ({ currentUser }) => {
     setSelectedNeeds(newSelected);
   };
 
+const handleRowClick = (needId) => {
+  // <<<--- ДОБАВИЛ: Проверка роли пользователя ---
+  if (currentUser && currentUser.role === 'admin') {
+    navigate(`/needs/${needId}`);
+  } else {
+    // Опционально: Показать уведомление, что доступ запрещен
+    setSnackbar({
+      open: true,
+      message: 'Просмотр деталей потребности доступен только администраторам.',
+      severity: 'warning',
+    });
+    // return;
+  }
+};
+  
   const isSelected = (id) => selectedNeeds.indexOf(id) !== -1;
 
   // <<< ДОБАВИЛ: Обработчики для модального окна изменения статуса
@@ -363,6 +372,20 @@ const NeedsList = ({ currentUser }) => {
       });
     }
   };
+
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    const newRowsPerPage = parseInt(event.target.value, 10);
+    setRowsPerPage(newRowsPerPage);
+    setPage(0); // Сброс на первую страницу при изменении количества строк
+  };
+
+  const paginatedNeeds = React.useMemo(() => {
+    return filteredNeeds.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  }, [filteredNeeds, page, rowsPerPage]);
 
   if (loading) return (
     <Container maxWidth="xl" style={{ marginTop: '20px', textAlign: 'center' }}>
@@ -544,14 +567,44 @@ const NeedsList = ({ currentUser }) => {
                       key={need.id}
                       hover
                       selected={isItemSelected}
-                      style={{ cursor: 'pointer' }}
+                      // <<<--- ИЗМЕНЕНО: Объединённая логика клика ---
                       onClick={(event) => {
-                         if (event.target.type !== 'checkbox' && event.target.tagName !== 'BUTTON' && event.target.tagName !== 'INPUT') {
-                           handleNavigationWithCheck(`/needs/${need.id}`);
-                         }
-                       }}
-                      // <<< ДОБАВИЛ: Стили для строки при выборе (опционально)
+                        // Проверяем, не кликнули ли по интерактивному элементу (чекбокс, кнопка и т.д.)
+                        if (
+                          event.target.type !== 'checkbox' &&
+                          event.target.tagName !== 'BUTTON' &&
+                          event.target.tagName !== 'INPUT'
+                        ) {
+                          // 1. Проверка роли пользователя
+                          if (currentUser && currentUser.role === 'admin') {
+                            // 2. Если админ, проверяем выделенные элементы
+                            if (selectedNeeds.length > 0) {
+                              // Запрашиваем подтверждение
+                              if (window.confirm('У вас есть выделенные потребности. Вы уверены, что хотите открыть карточку?')) {
+                                setSelectedNeeds([]); // Очищаем выбор
+                                navigate(`/needs/${need.id}`); // Переходим
+                              }
+                              // Если пользователь отменил, ничего не делаем
+                            } else {
+                              // Нет выделенных, просто переходим
+                              navigate(`/needs/${need.id}`);
+                            }
+                          } else {
+                            // 3. Если не админ, показываем уведомление
+                            setSnackbar({
+                              open: true,
+                              message: 'Просмотр деталей потребности доступен только администраторам.',
+                              severity: 'warning',
+                            });
+                            // Блокируем переход
+                          }
+                        }
+                        // Если клик был по чекбоксу/кнопке, ничего не делаем, пусть работают их обработчики
+                      }}
+                      // --- КОНЕЦ ИЗМЕНЕНИЙ ---
                       sx={{
+                        // Меняем курсор: pointer для админов, default для остальных
+                        cursor: currentUser && currentUser.role === 'admin' ? 'pointer' : 'default',
                         '&.Mui-selected': {
                           backgroundColor: theme.palette.action.selected,
                         },
@@ -588,6 +641,20 @@ const NeedsList = ({ currentUser }) => {
             </TableBody>
           </Table>
         </TableContainer>
+
+        <TablePagination
+          rowsPerPageOptions={[10, 25, 50, 100]}
+          component="div"
+          count={filteredNeeds.length} // Общее количество отфильтрованных элементов
+          rowsPerPage={rowsPerPage}   // Текущее количество строк на странице
+          page={page}                  // Текущая страница (индекс с 0)
+          onPageChange={handleChangePage} // Обработчик смены страницы
+          onRowsPerPageChange={handleChangeRowsPerPage} // Обработчик смены кол-ва строк
+          labelRowsPerPage="Строк на странице:"
+          labelDisplayedRows={({ from, to, count }) =>
+            `${from}-${to} из ${count !== -1 ? count : `больше чем ${to}`}`
+          }
+        />
 
         {/* Уведомления */}
         <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleCloseSnackbar}>

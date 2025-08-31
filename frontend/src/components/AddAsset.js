@@ -252,29 +252,6 @@ const AddAsset = ({ currentUser }) => {
     setOpenCancelDialog(false);
   };
 
-  const renderDynamicField = (propertyName) => {
-    const fieldName = mapPropertyNameToAssetField(propertyName);
-    const value = dynamicFields[fieldName] || '';
-
-    let fieldType = 'text';
-    if (propertyName.toLowerCase().includes('дата')) {
-      fieldType = 'date';
-    }
-
-    return (
-      <TextField
-        key={fieldName}
-        label={propertyName}
-        name={fieldName}
-        value={value}
-        onChange={handleDynamicFieldChange(fieldName)}
-        fullWidth
-        margin="normal"
-        sx={{ mb: -1 }}
-      />
-    );
-  };
-
   return (
     <Container maxWidth="md" style={{ marginTop: '10px' }}>
       <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -496,6 +473,12 @@ const AddAsset = ({ currentUser }) => {
               fullWidth
               margin="normal"
               InputLabelProps={{ shrink: true }}
+              InputProps={{
+                inputProps: {
+                  min: "1000-01-01",
+                  max: "9999-12-31"
+                }
+              }}
               error={!!errors.purchase_date}
               helperText={errors.purchase_date}
               sx={{ mb: -1 }}

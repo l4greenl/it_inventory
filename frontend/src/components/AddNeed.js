@@ -17,6 +17,11 @@ import {
   DialogContentText,
   DialogTitle,
   useTheme,
+  Tooltip,
+  // <<< ДОБАВИЛ CircularProgress для индикатора загрузки
+  CircularProgress, 
+  // <<< ДОБАВИЛ Alert для отображения ошибок
+  Alert, 
 } from '@mui/material';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
@@ -35,9 +40,17 @@ const AddNeed = ({ currentUser }) => {
     note: '',
   });
 
+  // <<< ДОБАВИЛ: Состояние для отслеживания touched-полей (которые пользователь начал заполнять)
+  const [touched, setTouched] = useState({});
+  // <<< ДОБАВИЛ: Состояние для ошибок валидации
+  const [errors, setErrors] = useState({});
+  // <<< ДОБАВИЛ: Состояние загрузки
+  const [loading, setLoading] = useState(false);
+  // <<< ДОБАВИЛ: Состояние для ошибок сервера
+  const [serverError, setServerError] = useState('');
+
   const [departments, setDepartments] = useState([]);
   const [types, setTypes] = useState([]);
-  const [errors, setErrors] = useState({});
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
 
   // Загрузка справочников
@@ -48,7 +61,6 @@ const AddNeed = ({ currentUser }) => {
           axios.get(`${API_BASE_URL}/api/departments`, { withCredentials: true }),
           axios.get(`${API_BASE_URL}/api/types`, { withCredentials: true }),
         ]);
-        // Сортируем по алфавиту
         const sortedDepts = deptsRes.data.sort((a, b) =>
           a.name.localeCompare(b.name, 'ru')
         );
@@ -66,44 +78,80 @@ const AddNeed = ({ currentUser }) => {
     fetchData();
   }, []);
 
+  // <<< ИЗМЕНЕНО: Функция для проверки валидности конкретного поля
+  const validateField = (name, value) => {
+    switch (name) {
+      case 'department_id':
+        return value ? '' : 'Обязательное поле';
+      case 'asset_type_id':
+        return value ? '' : 'Обязательное поле';
+      case 'quantity':
+        const numValue = parseInt(value, 10);
+        return (!isNaN(numValue) && numValue > 0) ? '' : 'Введите положительное число';
+      case 'reason_date':
+        return value ? '' : 'Обязательное поле';
+      case 'status':
+        return value && value.trim() ? '' : 'Обязательное поле';
+      default:
+        return '';
+    }
+  };
+
+  // <<< ИЗМЕНЕНО: Функция для проверки всей формы
+  const validateForm = () => {
+    const newErrors = {};
+    Object.keys(need).forEach(key => {
+      newErrors[key] = validateField(key, need[key]);
+    });
+    return newErrors;
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setNeed((prev) => ({ ...prev, [name]: value }));
 
-    // Очищаем ошибку при изменении поля
-    if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: '' }));
+    // <<< ДОБАВИЛ: Отмечаем поле как "touched" при изменении
+    setTouched((prev) => ({ ...prev, [name]: true }));
+
+    // <<< ДОБАВИЛ: Валидируем поле при изменении, если оно уже было "touched"
+    if (touched[name] || errors[name]) {
+        const error = validateField(name, value);
+        setErrors((prev) => ({ ...prev, [name]: error }));
     }
   };
 
-  // Проверка обязательных полей
-  const validateForm = () => {
-    const newErrors = {};
-    if (!need.department_id) newErrors.department_id = 'Обязательное поле';
-    if (!need.asset_type_id) newErrors.asset_type_id = 'Обязательное поле';
-    if (!need.quantity || parseInt(need.quantity, 10) <= 0) newErrors.quantity = 'Введите положительное число';
-    if (!need.reason_date) newErrors.reason_date = 'Обязательное поле';
-    if (!need.status.trim()) newErrors.status = 'Обязательное поле';
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
+  // <<< ИЗМЕНЕНО: handleSubmit теперь асинхронная и предотвращает стандартное поведение формы
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
+    e.preventDefault(); // <<< ВАЖНО: Предотвращаем перезагрузку страницы
+
+    // <<< ДОБАВИЛ: Помечаем все поля как "touched" при попытке отправки
+    const allTouched = Object.keys(need).reduce((acc, key) => {
+        acc[key] = true;
+        return acc;
+    }, {});
+    setTouched(allTouched);
+
+    // <<< ДОБАВИЛ: Проводим валидацию
+    const formErrors = validateForm();
+    setErrors(formErrors);
+
+    // <<< ДОБАВИЛ: Проверяем, есть ли ошибки
+    const hasErrors = Object.values(formErrors).some(error => error !== '');
+    if (hasErrors) {
+        return; // Прерываем отправку, если есть ошибки
     }
+
+    setLoading(true);
+    setServerError(''); // Очищаем предыдущую ошибку сервера
 
     // Подготовка данных для отправки
     const dataToSend = {
       department_id: parseInt(need.department_id, 10),
       asset_type_id: parseInt(need.asset_type_id, 10),
       quantity: parseInt(need.quantity, 10),
-      reason_date: need.reason_date, // Дата основания
+      reason_date: need.reason_date,
       status: need.status.trim(),
-      note: need.note.trim() || null, // Примечание может быть null
+      note: need.note.trim() || null,
     };
 
     try {
@@ -116,41 +164,48 @@ const AddNeed = ({ currentUser }) => {
 
       if (response.status === 201) {
         alert('Потребность успешно добавлена!');
-        navigate('/needs'); // Переход к списку после успешного добавления
+        navigate('/needs');
       }
     } catch (error) {
       console.error('Ошибка при добавлении потребности:', error);
+      let errorMessage = 'Неизвестная ошибка';
       if (error.response) {
         if (error.response.status === 400) {
-          alert(`Ошибка в данных: ${error.response.data.error || 'Проверьте правильность заполнения формы.'}`);
+          errorMessage = `Ошибка в данных: ${error.response.data.error || 'Проверьте правильность заполнения формы.'}`;
+          // Если сервер прислал детали ошибок по полям, обновим их
+          if (error.response.data.details) {
+              const serverFieldErrors = error.response.data.details;
+              setErrors(prevErrors => ({ ...prevErrors, ...serverFieldErrors }));
+          }
         } else if (error.response.status === 401) {
-          alert('Ошибка авторизации. Пожалуйста, войдите в систему.');
-          // Можно вызвать logout функцию здесь, если она доступна
+          errorMessage = 'Ошибка авторизации. Пожалуйста, войдите в систему.';
         } else if (error.response.status === 403) {
-          alert('Доступ запрещен. У вас нет прав для выполнения этой операции.');
+          errorMessage = 'Доступ запрещен. У вас нет прав для выполнения этой операции.';
         } else if (error.response.status === 500) {
-          alert('Внутренняя ошибка сервера. Пожалуйста, попробуйте позже.');
+          errorMessage = 'Внутренняя ошибка сервера. Пожалуйста, попробуйте позже.';
         } else {
-          alert(`Ошибка сервера: ${error.response.status} - ${error.response.statusText}`);
+          errorMessage = `Ошибка сервера: ${error.response.status} - ${error.response.statusText}`;
         }
       } else if (error.request) {
-        alert('Ошибка сети. Проверьте подключение к интернету.');
+        errorMessage = 'Ошибка сети. Проверьте подключение к интернету.';
       } else {
-        alert(`Ошибка: ${error.message}`);
+        errorMessage = `Ошибка: ${error.message}`;
       }
+      setServerError(errorMessage); // Отображаем ошибку сервера
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleCancel = () => {
-    // Проверяем, есть ли несохраненные изменения
     const hasChanges = Object.values(need).some(
       (value) => value !== '' && value !== null && value !== undefined
     );
     
     if (hasChanges) {
-      setCancelDialogOpen(true); // Открываем диалог подтверждения
+      setCancelDialogOpen(true);
     } else {
-      navigate('/needs'); // Нет изменений, просто уходим
+      navigate('/needs');
     }
   };
 
@@ -163,32 +218,29 @@ const AddNeed = ({ currentUser }) => {
     setCancelDialogOpen(false);
   };
 
-  return (
-    <Container maxWidth="md" sx={{ mt: 3, mb: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
-        <Typography variant="h5" component="h2" sx={{ fontWeight: 'bold' }}>
-          Добавить потребность
-        </Typography>
-      </Box>
+  // <<< ДОБАВИЛ: Функция для определения, должно ли поле быть выделено как ошибочное
+  const isError = (fieldName) => {
+    return touched[fieldName] && !!errors[fieldName];
+  };
 
+  return (
+    <Container maxWidth="md">
+      <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 3 }}>
+        <Typography variant="h5" gutterBottom>Добавить потребность</Typography>
+      </Box>
+        {serverError && (
+          <Alert severity="error" sx={{ mb: 2 }}>{serverError}</Alert>
+        )}
       <Box
         component="form"
         onSubmit={handleSubmit}
-        sx={{
-          backgroundColor: theme.palette.background.paper,
-          padding: 3,
-          borderRadius: 2,
-          boxShadow: 3,
-        }}
       >
         <Grid container spacing={2}>
-          {/* Отдел (подразделение) - Обязательное */}
           <Grid item xs={12} sm={6}>
             <FormControl
               fullWidth
               margin="normal"
-              error={!!errors.department_id}
-              required
+              error={isError('department_id')}
             >
               <InputLabel id="department-label">Отдел (подразделение) *</InputLabel>
               <Select
@@ -197,6 +249,7 @@ const AddNeed = ({ currentUser }) => {
                 value={need.department_id}
                 onChange={handleChange}
                 label="Отдел (подразделение) *"
+                sx={isError('department_id') ? {'& .MuiOutlinedInput-notchedOutline': { borderColor: 'error.main' } } : {mb: -2}}
               >
                 {departments.map((dept) => (
                   <MenuItem key={dept.id} value={dept.id}>
@@ -204,21 +257,14 @@ const AddNeed = ({ currentUser }) => {
                   </MenuItem>
                 ))}
               </Select>
-              {errors.department_id && (
-                <Typography variant="caption" color="error">
-                  {errors.department_id}
-                </Typography>
-              )}
             </FormControl>
           </Grid>
 
-          {/* Наименование потребности (Тип устройства) - Обязательное */}
           <Grid item xs={12} sm={6}>
             <FormControl
               fullWidth
               margin="normal"
-              error={!!errors.asset_type_id}
-              required
+              error={isError('asset_type_id')}
             >
               <InputLabel id="asset-type-label">Наименование потребности *</InputLabel>
               <Select
@@ -227,6 +273,7 @@ const AddNeed = ({ currentUser }) => {
                 value={need.asset_type_id}
                 onChange={handleChange}
                 label="Наименование потребности *"
+                sx={isError('asset_type_id') ? {'& .MuiOutlinedInput-notchedOutline': { borderColor: 'error.main' } } : {mb: -2}}
               >
                 {types.map((type) => (
                   <MenuItem key={type.id} value={type.id}>
@@ -234,15 +281,9 @@ const AddNeed = ({ currentUser }) => {
                   </MenuItem>
                 ))}
               </Select>
-              {errors.asset_type_id && (
-                <Typography variant="caption" color="error">
-                  {errors.asset_type_id}
-                </Typography>
-              )}
             </FormControl>
           </Grid>
 
-          {/* Количество - Обязательное */}
           <Grid item xs={12} sm={6}>
             <TextField
               label="Количество *"
@@ -252,14 +293,12 @@ const AddNeed = ({ currentUser }) => {
               onChange={handleChange}
               fullWidth
               margin="normal"
-              error={!!errors.quantity}
-              helperText={errors.quantity}
-              required
+              error={isError('quantity')}
               inputProps={{ min: "1", step: "1" }}
+              sx={isError('quantity') ? {'& .MuiOutlinedInput-notchedOutline': { borderColor: 'error.main' } } : {mb: -1}}
             />
           </Grid>
 
-          {/* Основание (Дата) - Обязательное */}
           <Grid item xs={12} sm={6}>
             <TextField
               label="Дата основания *"
@@ -269,31 +308,29 @@ const AddNeed = ({ currentUser }) => {
               onChange={handleChange}
               fullWidth
               margin="normal"
-              error={!!errors.reason_date}
-              helperText={errors.reason_date}
-              required
+              error={isError('reason_date')}
               InputLabelProps={{
                 shrink: true,
               }}
+              sx={isError('reason_date') ? {'& .MuiOutlinedInput-notchedOutline': { borderColor: 'error.main' } } : {mb: -1}}
             />
           </Grid>
 
-          {/* Статус - Обязательное */}
           <Grid item xs={12}>
-            <TextField
-              label="Статус *"
-              name="status"
-              value={need.status}
-              onChange={handleChange}
-              fullWidth
-              margin="normal"
-              error={!!errors.status}
-              helperText={errors.status}
-              required
-            />
+            <Tooltip title='Например: "В работе"' arrow>
+              <TextField
+                label="Статус *"
+                name="status"
+                value={need.status}
+                onChange={handleChange}
+                fullWidth
+                margin="normal"
+                error={isError('status')}
+                sx={isError('status') ? { '& .MuiOutlinedInput-notchedOutline': { borderColor: 'error.main' } } : {mb: -1}}
+              />
+            </Tooltip>
           </Grid>
 
-          {/* Примечание */}
           <Grid item xs={12}>
             <TextField
               label="Примечание"
@@ -308,28 +345,26 @@ const AddNeed = ({ currentUser }) => {
           </Grid>
         </Grid>
 
-        {/* Кнопки действий */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
+        <Box display="flex" justifyContent="space-between" mt={1.5} mb={2}>
           <Button
             variant="outlined"
-            color="secondary"
+            color="primary"
             onClick={handleCancel}
-            sx={{ minWidth: 120 }}
           >
             Отмена
           </Button>
           <Button
             variant="contained"
-            color="success" // Зелёная кнопка
-            type="submit"
+            color="success"
+            type="submit" // <<< ВАЖНО: type="submit" для отправки формы
             sx={{ minWidth: 120 }}
+            disabled={loading} // <<< ДОБАВИЛ: Блокировка во время загрузки
           >
-            Добавить
+            {loading ? <CircularProgress size={24} /> : 'Добавить'} {/* <<< ДОБАВИЛ: Индикатор загрузки */}
           </Button>
         </Box>
       </Box>
 
-      {/* Диалог подтверждения отмены */}
       <Dialog
         open={cancelDialogOpen}
         onClose={handleCloseCancelDialog}

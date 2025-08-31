@@ -886,6 +886,81 @@ def update_need(id):
         app.logger.error(f"Ошибка при обновлении потребности {id}: {e}")
         return jsonify({'error': 'Ошибка при обновлении потребности'}), 500
 
+# === Эндпоинт для пакетного обновления потребностей (например, изменения статуса) ===
+@app.route('/api/needs/batch-update', methods=['PATCH']) # <<< Используем PATCH
+@login_required
+def update_needs_batch():
+    """
+    Обновляет поля указанных потребностей.
+    Тело запроса: JSON {"ids": [1, 2, 3], "status": "Новый статус"}
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Нет данных для обновления'}), 400
+
+        ids_to_update = data.get('ids')
+        status = data.get('status')
+
+        # --- Валидация входных данных ---
+        if not ids_to_update or not isinstance(ids_to_update, list):
+            return jsonify({'error': 'Список ID не предоставлен или неверного формата'}), 400
+
+        if not status or not isinstance(status, str) or not status.strip():
+             return jsonify({'error': 'Новый статус не предоставлен или пуст'}), 400
+
+        status_clean = status.strip()
+
+        # Проверка, что все IDs - целые числа
+        try:
+            ids_to_update = [int(id_) for id_ in ids_to_update]
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Все ID должны быть целыми числами'}), 400
+
+        if not ids_to_update:
+             return jsonify({'message': 'Нечего обновлять'}), 200
+
+        # --- Обновление записей ---
+        # Используем bulk_update_mappings для эффективности
+        updates = [{'id': id_, 'status': status_clean} for id_ in ids_to_update]
+        # bulk_update_mappings обновляет только указанные поля
+        db.session.bulk_update_mappings(Need, updates)
+        db.session.commit()
+
+        return jsonify({'message': f'Статус успешно обновлён для {len(ids_to_update)} потребностей'}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Ошибка при пакетном обновлении потребностей: {e}")
+        return jsonify({'error': 'Ошибка при обновлении потребностей'}), 500
+
+# === Эндпоинт для УДАЛЕНИЯ одной потребности по ID ===
+@app.route('/api/needs/<int:id>', methods=['DELETE']) # <<< ВАЖНО: methods=['DELETE']
+@login_required # <<< ВАЖНО: если требуется аутентификация
+def delete_need(id):
+    """Удалить потребность по её ID."""
+    try:
+        # Используем современный метод get для поиска объекта
+        need = db.session.get(Need, id)
+        if not need:
+            # Если не найден, возвращаем 404
+            return jsonify({'error': 'Потребность не найдена'}), 404
+
+        # Выполняем удаление
+        db.session.delete(need)
+        db.session.commit()
+        
+        # Возвращаем сообщение об успехе
+        return jsonify({'message': f'Потребность с ID {id} успешно удалена'}), 200
+
+    except Exception as e:
+        # Откатываем транзакцию в случае ошибки
+        db.session.rollback()
+        # Логируем ошибку для отладки
+        app.logger.error(f"Ошибка при удалении потребности с ID {id}: {e}")
+        # Возвращаем общую ошибку сервера
+        return jsonify({'error': 'Ошибка при удалении потребности'}), 500
+
 # --- QR-код ---
 @app.route('/api/qrcodes', methods=['POST'])
 @login_required # Убедитесь, что доступ ограничен
