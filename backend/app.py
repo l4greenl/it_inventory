@@ -36,47 +36,53 @@ login_manager.login_view = 'login'
 def load_user(user_id):
     return db.session.get(User, int(user_id))
 
-# === Вспомогательная функция для преобразования ID в читаемые значения ===
-def get_display_value(field, value):
-    """Преобразует ID в человеко-читаемое значение для отображения в логах"""
+def get_display_value(field_name, value):
+    """Преобразует значение поля в человеко-читаемую строку для логирования."""
     if value is None or value == '':
-        return '-'
+        return ''
 
-    if field in ['category_id', 'type_id']:
-        try:
-            type_id = int(value)
-            # Используем Type, так как category_id было переименовано
-            type_obj = Type.query.get(type_id)
-            return type_obj.name if type_obj else f"Тип #{type_id}"
-        except (ValueError, TypeError):
+    if field_name == 'type_id':
+        type_obj = db.session.get(Type, value)
+        return type_obj.name if type_obj else f"Неизвестный тип (ID: {value})"
+    elif field_name == 'department_id':
+        dept_obj = db.session.get(Department, value)
+        return dept_obj.name if dept_obj else f"Неизвестный отдел (ID: {value})"
+    elif field_name in ['responsible_person', 'actual_user']: # Обработка обоих полей
+        emp_obj = db.session.get(Employee, value)
+        return emp_obj.name if emp_obj else f"Неизвестный сотрудник (ID: {value})"
+    elif field_name == 'status_id':
+        stat_obj = db.session.get(Status, value)
+        return stat_obj.name if stat_obj else f"Неизвестный статус (ID: {value})"
+    elif field_name == 'purchase_date':
+        if isinstance(value, (date, datetime)):
+            return value.strftime('%Y-%m-%d')
+        elif isinstance(value, str):
+             try:
+                 date.fromisoformat(value)
+                 return value
+             except ValueError:
+                 return str(value)
+        else:
             return str(value)
-
-    elif field == 'department_id':
-        try:
-            dept_id = int(value)
-            dept = Department.query.get(dept_id)
-            return dept.name if dept else f"Отдел #{dept_id}"
-        except (ValueError, TypeError):
-            return str(value)
-
-    elif field == 'status_id':
-        try:
-            stat_id = int(value)
-            stat = Status.query.get(stat_id)
-            return stat.name if stat else f"Статус #{stat_id}"
-        except (ValueError, TypeError):
-            return str(value)
-
-    elif field == 'responsible_person':
-        try:
-            emp_id = int(value)
-            emp = Employee.query.get(emp_id)
-            return emp.name if emp else f"Сотрудник #{emp_id}"
-        except (ValueError, TypeError):
-            return str(value)
-
     else:
         return str(value)
+
+# --- Функция для безопасного преобразования в INT или None ---
+def get_int_or_none(value):
+    """
+    Преобразует значение в int или возвращает None, если значение пустое или недопустимо.
+    """
+    # Проверяем, является ли значение "пустым" (None, пустая строка, строка из пробелов)
+    if value is None or value == '' or (isinstance(value, str) and value.strip() == ''):
+        return None
+    try:
+        # Пробуем преобразовать в целое число
+        return int(value)
+    except (ValueError, TypeError):
+        # Если преобразование не удалось (например, value = "abc"), логируем и возвращаем None
+        # Можно также вызвать return jsonify({'error': ...}), 400 если формат критичен
+        app.logger.warning(f"Невозможно преобразовать значение '{value}' в integer. Установлено в None.")
+        return None
 
 # === Маршруты API ===
 
@@ -169,18 +175,6 @@ def create_asset():
     # --- Конец проверки обязательных полей ---
 
     try:
-        # --- Функция для безопасного получения целочисленного значения ---
-        def get_int_or_none(key):
-            value = data.get(key)
-            if value is None or value == '':
-                return None
-            try:
-                return int(value)
-            except (ValueError, TypeError):
-                app.logger.warning(f"Невозможно преобразовать значение '{value}' для поля '{key}' в integer. Установлено в None.")
-                return None
-        # --- Конец функции ---
-
         # --- Обработка даты ---
         purchase_date_value = None
         if data.get('purchase_date'):
@@ -191,26 +185,27 @@ def create_asset():
         # --- Конец обработки даты ---
 
         # --- Создание объекта актива ---
+        # Используем ГЛОБАЛЬНУЮ функцию get_int_or_none для обработки INTEGER полей
         new_asset = Asset(
             serial_number=data.get('serial_number'),
             inventory_number=data.get('inventory_number'),
             brand=data.get('brand'),
             model=data.get('model'),
-            type_id=get_int_or_none('type_id'),
-            department_id=get_int_or_none('department_id'),
+            type_id=get_int_or_none(data.get('type_id')), # <<< Используем ГЛОБАЛЬНУЮ функцию
+            department_id=get_int_or_none(data.get('department_id')), # <<< Используем ГЛОБАЛЬНУЮ функцию
             room=data.get('room'),
             purchase_date=purchase_date_value,
-            responsible_person=get_int_or_none('responsible_person'),
-            actual_user=get_int_or_none('actual_user'), # Используем get_int_or_none
+            responsible_person=get_int_or_none(data.get('responsible_person')), # <<< Используем ГЛОБАЛЬНУЮ функцию
+            actual_user=get_int_or_none(data.get('actual_user')), # <<< Используем ГЛОБАЛЬНУЮ функцию
             comments=data.get('comments'),
-            status_id=get_int_or_none('status_id'),
+            status_id=get_int_or_none(data.get('status_id')), # <<< Используем ГЛОБАЛЬНУЮ функцию
             diagonal=data.get('diagonal'), # Предполагается, что это VARCHAR/TEXT
             CPU=data.get('CPU'),          # Предполагается, что это VARCHAR/TEXT
             RAM=data.get('RAM'),          # Предполагается, что это VARCHAR/TEXT
             Drive=data.get('Drive'),      # Предполагается, что это VARCHAR/TEXT
             OS=data.get('OS'),            # Предполагается, что это VARCHAR/TEXT
             IP_address=data.get('IP_address'), # Предполагается, что это VARCHAR/TEXT
-            number=data.get('number')     # Предполагается, что это VARCHAR/TEXT или INTEGER (если INTEGER, используйте get_int_or_none)
+            number=get_int_or_none(data.get('number')) # <<< Используем ГЛОБАЛЬНУЮ функцию, если это INTEGER
             # Добавьте другие динамические поля, если они есть в модели и отправляются
         )
         db.session.add(new_asset)
@@ -258,7 +253,7 @@ def update_asset(id):
         return jsonify({'error': 'Нет данных для обновления'}), 400
 
     # 2. Получение актива
-    asset = db.session.get(Asset, id)
+    asset = db.session.get(Asset, id) # Используем современный метод
     if not asset:
         return jsonify({'error': 'Актив не найден'}), 404
 
@@ -283,85 +278,117 @@ def update_asset(id):
         'OS': asset.OS,
         'IP_address': asset.IP_address,
         'number': asset.number,
+        # Добавьте сюда другие динамические поля, если они есть и отслеживаются
     }
 
     # --- НОВАЯ ЛОГИКА ОБНОВЛЕНИЯ ---
-    # 4. Обновление полей актива НЕПОСРЕДСТВЕННО из data
-    # Это простой и прямолинейный способ: если ключ есть в data и в списке разрешенных полей, обновляем.
-    allowed_fields = set(old_values.keys()) # Множество для быстрого поиска
-    fields_to_update = {} # Словарь для сбора изменений
+    # 4. Обновление полей актива с учетом типов данных
+    allowed_fields = set(old_values.keys())
+    fields_to_update = {} # Для отслеживания изменений
     
     for key, new_value in data.items():
         if key in allowed_fields:
             old_value = old_values.get(key)
-            # Преобразуем даты для корректного сравнения, если нужно
-            if key == 'purchase_date':
+            
+            # --- Обработка INTEGER полей ---
+            # Поля, которые в БД являются INTEGER (ID ссылок)
+            integer_fields = ['type_id', 'department_id', 'responsible_person', 'actual_user', 'status_id']
+            if key in integer_fields:
+                # Преобразуем пустые строки в None для INTEGER полей
+                processed_new_value = get_int_or_none(new_value)
+                # Сравниваем обработанные значения
+                if old_value != processed_new_value:
+                     fields_to_update[key] = processed_new_value
+                     setattr(asset, key, processed_new_value) # Устанавливаем обработанное значение
+            
+            # --- Обработка DATE полей ---
+            elif key == 'purchase_date':
                  try:
+                     # Преобразуем старое значение в объект date для сравнения
                      old_date_obj = date.fromisoformat(str(old_value)) if old_value else None
                  except (ValueError, TypeError):
-                     old_date_obj = old_value
+                     old_date_obj = old_value # Оставляем как есть, если не удалось преобразовать
+                     
                  try:
+                     # Преобразуем новое значение в объект date для сравнения
                      new_date_obj = date.fromisoformat(str(new_value)) if new_value else None
                  except (ValueError, TypeError):
-                     new_date_obj = new_value
+                     new_date_obj = new_value # Оставляем как есть, если не удалось преобразовать
                  
-                 # Сравниваем преобразованные даты или оригинальные значения
+                 # Сравниваем объекты date или оригинальные значения
                  if old_date_obj != new_date_obj:
-                     fields_to_update[key] = new_value
-                     setattr(asset, key, new_value)
+                     fields_to_update[key] = new_value # Сохраняем оригинальное новое значение для лога
+                     setattr(asset, key, new_date_obj) # Устанавливаем преобразованный объект date или None
+            
+            # --- Обработка STRING и других полей ---
             else:
-                # Для остальных полей простое сравнение
-                if old_value != new_value:
-                    fields_to_update[key] = new_value
-                    setattr(asset, key, new_value)
+                # Для строковых полей и других типов простое сравнение
+                # Можно добавить .strip() для строк, если нужно
+                # processed_new_value = new_value.strip() if isinstance(new_value, str) else new_value
+                processed_new_value = new_value
+                
+                if old_value != processed_new_value:
+                    fields_to_update[key] = processed_new_value
+                    setattr(asset, key, processed_new_value)
     # --- КОНЕЦ НОВОЙ ЛОГИКИ ОБНОВЛЕНИЯ ---
 
     if fields_to_update: # Только если были изменения
         try:
-            def log_single_change(field, old_val, new_val):
-                 # Используем старую логику сравнения из предыдущих версий, если она работала
-                 # или оставляем простое сравнение, так как мы уже проверили выше
-                 
-                 display_old = get_display_value(field, old_val)
-                 display_new = get_display_value(field, new_val)
+            # --- Логирование изменений ---
+            # Формирование asset_name для лога
+            # Приоритет: новые данные из data -> старые данные из asset (через old_values)
+            # Используем обработанные значения или оригинальные из old_values/data
+            current_type_id = data.get('type_id', old_values.get('type_id'))
+            current_type = db.session.get(Type, current_type_id) if current_type_id else None
+            type_name = current_type.name if current_type else "Без типа"
+            brand = data.get('brand', old_values.get('brand')) or ""
+            model = data.get('model', old_values.get('model')) or ""
+            asset_name_for_log = f"{type_name} {brand} {model}".strip()
+            inventory_number_for_log = data.get('inventory_number', old_values.get('inventory_number'))
 
-                 # Формирование asset_name для лога (используем обновленные или старые данные)
-                 # Приоритет: новые данные из data -> старые данные из asset (через old_values)
-                 current_type_id = data.get('type_id', old_values.get('type_id'))
-                 # ИСПРАВЛЕНО: LegacyAPIWarning
-                 current_type = db.session.get(Type, current_type_id) if current_type_id else None
-                 type_name = current_type.name if current_type else "Без типа"
-                 brand = data.get('brand', old_values.get('brand')) or ""
-                 model = data.get('model', old_values.get('model')) or ""
-                 asset_name = f"{type_name} {brand} {model}".strip()
-                 inventory_number = data.get('inventory_number', old_values.get('inventory_number'))
-
-                 change = Change(
-                     asset_id=asset.id,
-                     inventory_number=inventory_number,
-                     asset_name=asset_name,
-                     action="updated",
-                     field=field,
-                     old_value=display_old,
-                     new_value=display_new
-                 )
-                 db.session.add(change)
-            # --- Конец функции логирования ---
-            
-            # Логируем каждое измененное поле
             for field_key, new_val in fields_to_update.items():
-                log_single_change(field_key, old_values.get(field_key), new_val)
+                # Получаем старое значение для лога
+                old_val_log = old_values.get(field_key)
+                
+                # --- Получение человеко-читаемых значений для лога ---
+                # Используем get_display_value для красивого отображения в логах
+                try:
+                    display_old_log = get_display_value(field_key, old_val_log)
+                    display_new_log = get_display_value(field_key, new_val)
+                except Exception as e:
+                    # Если get_display_value сломалась, используем простое строковое представление
+                    app.logger.warning(f"Ошибка в get_display_value для поля {field_key}: {e}. Используются простые строки.")
+                    display_old_log = str(old_val_log) if old_val_log is not None else ''
+                    display_new_log = str(new_val) if new_val is not None else ''
+                # --- Конец получения человеко-читаемых значений ---
 
-            # 6. Сохранение изменений в БД
+                change = Change(
+                    asset_id=asset.id,
+                    inventory_number=inventory_number_for_log,
+                    asset_name=asset_name_for_log,
+                    action="updated",
+                    field=field_key,
+                    old_value=display_old_log, # Используем человеко-читаемое старое значение
+                    new_value=display_new_log  # Используем человеко-читаемое новое значение
+                )
+                db.session.add(change)
+            # --- Конец логирования ---
+
+            # 5. Сохранение изменений в БД
             db.session.commit()
-            # ИСПРАВЛЕНО: LegacyAPIWarning - получаем обновленный объект
+            
+            # 6. Получение обновленного объекта (на всякий случай)
             updated_asset = db.session.get(Asset, id)
             return jsonify(updated_asset.to_dict()), 200
 
-        except IntegrityError as ie: # Обработка ошибок целостности БД
+        except IntegrityError as ie:
             db.session.rollback()
             app.logger.error(f"Ошибка целостности БД при обновлении актива {id}: {ie}")
-            return jsonify({'error': 'Ошибка данных', 'details': 'Нарушены ограничения базы данных (например, обязательное поле не заполнено, или ссылка на несуществующий объект).'}), 400
+            # Можно попытаться извлечь более конкретную информацию об ошибке из `ie.orig`
+            return jsonify({
+                'error': 'Ошибка данных',
+                'details': 'Нарушены ограничения базы данных (например, обязательное поле не заполнено, или ссылка на несуществующий объект).'
+            }), 400
         except Exception as e:
             db.session.rollback()
             app.logger.error(f"Ошибка при обновлении актива {id}: {e}")

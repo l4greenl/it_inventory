@@ -19,7 +19,6 @@ import {
   useTheme,
   CircularProgress,
   Alert,
-  // <<< ДОБАВИЛ Tooltip для подсказки у статуса
   Tooltip, 
 } from '@mui/material';
 import axios from 'axios';
@@ -391,7 +390,7 @@ const EditNeed = ({ currentUser }) => {
           </Grid>
 
           <Grid item xs={12}>
-            <Tooltip title='Например: "В работе"' arrow>
+            <Tooltip title='Например: В работе' arrow>
               <TextField
                 label="Статус *"
                 name="status"

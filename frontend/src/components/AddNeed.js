@@ -317,7 +317,7 @@ const AddNeed = ({ currentUser }) => {
           </Grid>
 
           <Grid item xs={12}>
-            <Tooltip title='Например: "В работе"' arrow>
+            <Tooltip title='Например: В работе' arrow>
               <TextField
                 label="Статус *"
                 name="status"

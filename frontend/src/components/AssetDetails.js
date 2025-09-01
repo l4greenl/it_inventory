@@ -19,7 +19,6 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  FormHelperText,
   Tooltip,
 } from '@mui/material';
 import axios from 'axios';
@@ -304,68 +303,22 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
     );
   };
 
-  // Обработчик изменения типа устройства
-  const handleTypeChange = async (e) => {
-    const newTypeId = parseInt(e.target.value, 10) || '';
-    // Обновляем asset.type_id через общий обработчик
-    handleChange(e);
-
-    if (newTypeId) {
-      try {
-        // Загружаем свойства нового типа
-        const propsRes = await axios.get(`${API_BASE_URL}/api/types/${newTypeId}/properties`, { withCredentials: true });
-        setTypeProperties(propsRes.data);
-
-        // Инициализируем dynamicFields значениями из asset
-        const initialDynamicFields = propsRes.data.map(property => {
-          const fieldName = mapPropertyNameToAssetField(property.name);
-          // Берем значение из текущего asset
-          return {
-            id: property.id,
-            name: property.name,
-            fieldName: fieldName,
-            value: asset[fieldName] || '' // Используем значение из asset или пустую строку
-          };
-        });
-        setDynamicFields(initialDynamicFields); // Устанавливаем массив
-
-      } catch (err) {
-        console.error('Ошибка при загрузке свойств нового типа:', err);
-        setTypeProperties([]);
-        setDynamicFields([]);
-        alert('Не удалось загрузить свойства для выбранного типа.');
-      }
-    } else {
-      // Если тип не выбран, очищаем свойства и поля
-      setTypeProperties([]);
-      setDynamicFields([]);
-    }
-  };
-
   const handleChange = (e) => {
     const { name, value } = e.target;
     setAsset(prevAsset => {
       const updatedAsset = { ...prevAsset, [name]: value };
 
-      // <<<--- НОВОЕ: Автозаполнение отдела при смене ответственного --- >>>
-      if (name === 'responsible_person') {
-        const selectedEmployee = employees.find(emp => emp.id === parseInt(value, 10));
-        if (selectedEmployee && selectedEmployee.department_id) {
-          updatedAsset.department_id = selectedEmployee.department_id;
-          // Очищаем ошибку, если она была
-          if (errors.department_id) {
-            setErrors(prevErrors => ({ ...prevErrors, department_id: '' }));
-          }
-        }
-      }
+      // <<< ИЗМЕНЕНО: Отмечаем поле как "touched" при изменении >>>
       setTouched(prevTouched => ({ ...prevTouched, [name]: true }));
 
-      // <<< ДОБАВИЛ: Валидируем поле при изменении, если оно уже было "touched" или имело ошибку
-      if (touched[name] || fieldErrors[name]) {
+      // <<< ИЗМЕНЕНО: Валидируем поле при изменении, если оно уже было "touched" или имело ошибку >>>
+      // Также валидируем, если поле стало валидным (например, пользователь выбрал значение в Select)
+      if (touched[name] || fieldErrors[name] || value !== '' || value !== null) {
         const error = validateField(name, value);
         setFieldErrors(prevErrors => ({ ...prevErrors, [name]: error }));
       }
-      // Очищаем ошибку для этого поля, если она была
+
+      // Очищаем старую ошибку, если она была (если используется старая система errors)
       if (errors[name]) {
         setErrors(prevErrors => ({ ...prevErrors, [name]: '' }));
       }
@@ -374,24 +327,62 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
     });
   };
 
+  const handleSelectChange = (e) => {
+    const { name, value } = e.target;
+    // Устанавливаем значение
+    setAsset(prevAsset => ({ ...prevAsset, [name]: value }));
+    
+    // Отмечаем как "touched"
+    setTouched(prevTouched => ({ ...prevTouched, [name]: true }));
+    
+    // Валидируем
+    const error = validateField(name, value);
+    setFieldErrors(prevErrors => ({ ...prevErrors, [name]: error }));
+    
+    // Очищаем старую ошибку
+    if (errors[name]) {
+        setErrors(prevErrors => ({ ...prevErrors, [name]: '' }));
+    }
+  };
+  
   const isFieldError = (fieldName) => {
-    return touched[fieldName] && !!fieldErrors[fieldName]; // Или errors[fieldName]
+    // Поле считается ошибочным, если оно было "touched" и валидация показала ошибку
+    // Дополнительно: если значение поля пустое/нулевое, но оно обязательное и touched, то ошибка
+    const isTouched = touched[fieldName];
+    const hasError = !!fieldErrors[fieldName];
+    
+    // Для обязательных полей Select: если touched, но значение не выбрано - показываем ошибку
+    const isRequiredSelect = ['type_id', 'status_id', 'responsible_person', 'department_id'].includes(fieldName);
+    const isEmptySelectValue = asset[fieldName] === null || asset[fieldName] === undefined || asset[fieldName] === '' || asset[fieldName] === 0;
+
+    if (isRequiredSelect && isTouched && isEmptySelectValue) {
+        return true; // Явно показываем ошибку для пустого обязательного Select
+    }
+
+    return isTouched && hasError;
   };
 
   // Обработчик сохранения изменений
   const handleSave = async () => {
+    // <<< ИЗМЕНЕНО: Помечаем все обязательные поля как "touched" при попытке сохранения >>>
     const requiredFields = ['inventory_number', 'type_id', 'status_id', 'responsible_person', 'department_id', 'purchase_date'];
     const allTouched = { ...touched };
     requiredFields.forEach(field => {
-      allTouched[field] = true;
+      allTouched[field] = true; // Помечаем обязательные поля как touched
     });
     setTouched(allTouched);
 
+    // <<< ИЗМЕНЕНО: Проводим валидацию >>>
     const formErrors = validateForm();
     setFieldErrors(formErrors);
 
+    // <<< ИЗМЕНЕНО: Проверяем, есть ли ошибки >>>
     const hasErrors = Object.values(formErrors).some(error => error !== '');
     if (hasErrors) {
+        // Не отправляем форму, если есть ошибки
+        // Опционально: можно показать общий алерт
+        // alert('Пожалуйста, заполните все обязательные поля');
+        console.log("Ошибки валидации:", formErrors); // Для отладки
         return;
     }
 
@@ -454,41 +445,75 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
   };
   
   const renderDynamicField = (field) => {
-    return (
-      <Grid item xs={12} sm={6} key={field.id}>
+    const tooltipTitle = FIELD_TOOLTIPS[field.fieldName];
+      const inputElement = (
         <TextField
           label={field.name}
           name={field.fieldName}
-          value={field.value}
-          onChange={(e) => handleDynamicFieldChange(field.fieldName, e.target.value)}
+          value={field.value || ''}
+          onChange={handleDynamicFieldChange}
           fullWidth
           margin="normal"
-          sx={{ mb: -1 }}
           disabled={!currentUser || currentUser.role !== 'admin'}
+          sx={{ mb: -1 }}
         />
-      </Grid>
-    );
+      );
+
+      if (tooltipTitle) {
+        return (
+          <Grid item xs={12} sm={6} key={field.id}>
+            <Tooltip 
+            title={tooltipTitle}
+             arrow
+             placement='bottom'
+             PopperProps={{
+                modifiers: [
+                  {
+                    name: 'offset',
+                    options: {
+                      offset: [0, 55],
+                    },
+                  },
+                ],
+                disablePortal: false
+             }}>
+              <span>{inputElement}</span>
+            </Tooltip>
+          </Grid>
+        );
+      }
+      
+
+      return (
+        <Grid item xs={12} sm={6} key={field.id}>
+          {inputElement}
+        </Grid>
+      );
   };
+
   // <<< ДОБАВИЛ: Функция для проверки валидности конкретного поля
   const validateField = (name, value) => {
     // Определяем обязательные поля
     const requiredFields = ['inventory_number', 'type_id', 'status_id', 'responsible_person', 'department_id', 'purchase_date'];
     if (requiredFields.includes(name)) {
-      // Для department_id проверяем, что оно не null/undefined/пустая строка
-      // Остальные поля проверяются на пустоту
-      if (name === 'department_id') {
-        return (value !== null && value !== undefined && value !== '') ? '' : 'Обязательное поле';
+      // Для выпадающих списков (type_id, status_id, responsible_person, department_id)
+      // проверяем, что значение не пустое и не ноль (если ID начинаются с 1)
+      if (name === 'type_id' || name === 'status_id' || name === 'responsible_person' || name === 'department_id') {
+        // Проверяем, что value - это не пустая строка, null, undefined или 0 (если 0 не допустимый ID)
+        // Предполагаем, что ID в БД начинаются с 1
+        return (value !== null && value !== undefined && value !== '' && value !== 0) ? '' : 'Обязательное поле';
       } else if (name === 'purchase_date') {
-         // Дата может быть объектом Date или строкой
-         return (value !== null && value !== undefined && value !== '') ? '' : 'Обязательное поле';
+        // Дата может быть объектом Date или строкой
+        return (value !== null && value !== undefined && value !== '') ? '' : 'Обязательное поле';
       } else {
-        // Для строковых полей проверяем trim
+        // Для текстовых полей проверяем trim
         return (value && typeof value === 'string' && value.trim() !== '') ? '' : 'Обязательное поле';
       }
     }
-    // Для необязательных полей или уже заполненных ошибочных возвращаем пустую строку
+    // Для необязательных полей возвращаем пустую строку
     return '';
   };
+
   // <<< ДОБАВИЛ: Функция для проверки всей формы
   const validateForm = () => {
     const newErrors = {};
@@ -496,18 +521,27 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
     
     requiredFields.forEach(field => {
       let value;
-      if (field === 'department_id' || field === 'responsible_person') {
-        value = asset[field];
-      } else if (field === 'purchase_date') {
-         value = asset[field];
-      } else {
-        value = asset[field];
-      }
+      // Получаем значение из состояния `asset`
+      // Для всех полей значение берется напрямую из asset
+      value = asset[field];
+   
+      // ВАЖНО: Передаем именно то значение, которое будет отправлено или отображено
       newErrors[field] = validateField(field, value);
     });
+
     return newErrors;
   };
 
+  // <<< ДОБАВИЛ: Карта подсказок для динамических полей >>>
+  const FIELD_TOOLTIPS = {
+    'CPU': 'Например: i5-3570',
+    'OS': 'Например: Windows 7 Pro',
+    'Drive': 'Например: HDD 250 Гб + SSD 1 Тб',
+    'RAM': 'Например: 4 Гб',
+    'diagonal': 'Например: 15,6"',
+    'IP_address': 'Например: 192.168.1.100',
+    'number': 'Например: 2129',
+  };
 
   // Условный рендеринг состояний загрузки/ошибки/отсутствия данных
   if (loading) return (
@@ -535,31 +569,35 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
         <Grid container spacing={2}>
           {/* Пара 1: Серийный номер | Инвентарный номер */}
           <Grid item xs={12} sm={6}>
-            <TextField
-              label="Серийный номер"
-              name="serial_number"
-              value={asset.serial_number || ''}
-              onChange={handleChange}
-              fullWidth
-              margin="normal"
-              sx={{ mb: -1 }}
-              disabled={!currentUser || currentUser.role !== 'admin'}
-            />
+            <Tooltip title='Например: EX583772630042024' arrow>
+              <TextField
+                label="Серийный номер"
+                name="serial_number"
+                value={asset.serial_number || ''}
+                onChange={handleChange}
+                fullWidth
+                margin="normal"
+                sx={{ mb: -1 }}
+                disabled={!currentUser || currentUser.role !== 'admin'}
+              />
+            </Tooltip>
           </Grid>
           <Grid item xs={12} sm={6}>
-            <TextField
-              label="Инвентарный номер *"
-              name="inventory_number"
-              value={asset.inventory_number || ''}
-              onChange={handleChange}
-              fullWidth
-              margin="normal"
-              sx={{ mb: -1,
-                ...(!isEditing ? {} : {}),
-                ...(isFieldError('inventory_number') ? { '& .MuiOutlinedInput-notchedOutline': { borderColor: 'error.main' } } : {})
-              }}
-              disabled={!currentUser || currentUser.role !== 'admin'}
-            />
+            <Tooltip title='Например: 1171066177' arrow>
+              <TextField
+                label="Инвентарный номер *"
+                name="inventory_number"
+                value={asset.inventory_number || ''}
+                onChange={handleChange}
+                fullWidth
+                margin="normal"
+                sx={{ mb: -1,
+                  ...(!isEditing ? {} : {}),
+                  ...(isFieldError('inventory_number') ? { '& .MuiOutlinedInput-notchedOutline': { borderColor: 'error.main' } } : {})
+                }}
+                disabled={!currentUser || currentUser.role !== 'admin'}
+              />
+            </Tooltip>
           </Grid>
 
           {/* Пара 2: Тип устройства | Производитель */}
@@ -576,7 +614,7 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
                 label="Тип устройства *"
                 name="type_id"
                 value={asset.type_id || ''}
-                onChange={handleTypeChange}
+                onChange={handleSelectChange}
                 sx={{ mb: -2 }}
                 disabled={!currentUser || currentUser.role !== 'admin'}
               >
@@ -589,30 +627,34 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
             </FormControl>
           </Grid>
           <Grid item xs={12} sm={6}>
-            <TextField
-              label="Производитель"
-              name="brand"
-              value={asset.brand || ''}
-              onChange={handleChange}
-              fullWidth
-              margin="normal"
-              sx={{ mb: -1 }}
-              disabled={!currentUser || currentUser.role !== 'admin'}
-            />
+            <Tooltip title='Например: PrimeBox' arrow>
+              <TextField
+                label="Производитель"
+                name="brand"
+                value={asset.brand || ''}
+                onChange={handleChange}
+                fullWidth
+                margin="normal"
+                sx={{ mb: -1 }}
+                disabled={!currentUser || currentUser.role !== 'admin'}
+              />
+            </Tooltip>
           </Grid>
 
           {/* Пара 3: Модель | Динамические поля (первая часть) */}
           <Grid item xs={12} sm={6}>
-            <TextField
-              label="Модель"
-              name="model"
-              value={asset.model || ''}
-              onChange={handleChange}
-              fullWidth
-              margin="normal"
-              sx={{ mb: -1 }}
-              disabled={!currentUser || currentUser.role !== 'admin'}
-            />
+            <Tooltip title='Например: EAGLE M24HVIB' arrow>
+              <TextField
+                label="Модель"
+                name="model"
+                value={asset.model || ''}
+                onChange={handleChange}
+                fullWidth
+                margin="normal"
+                sx={{ mb: -1 }}
+                disabled={!currentUser || currentUser.role !== 'admin'}
+              />
+            </Tooltip>
           </Grid>
 
           {dynamicFields.map(renderDynamicField)}
@@ -630,7 +672,7 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
                 label="Статус *"
                 name="status_id"
                 value={asset.status_id || ''}
-                onChange={handleChange}
+                onChange={handleSelectChange}
                 sx={{ mb: -2 }}
                 disabled={!currentUser || currentUser.role !== 'admin'}
               >
@@ -677,7 +719,7 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
                 label="Ответственный *"
                 name="responsible_person"
                 value={asset.responsible_person || ''}
-                onChange={handleChange}
+                onChange={handleSelectChange}
                 sx={{ mb: -2 }}
                 disabled={!currentUser || currentUser.role !== 'admin'}
               >
@@ -724,16 +766,18 @@ const AssetDetails = ({ currentUser }) => { // Принимаем currentUser к
 
           {/* Помещение | Дата покупки */}
           <Grid item xs={12} sm={6}>
-            <TextField
-              label="Помещение"
-              name="room"
-              value={asset.room || ''}
-              onChange={handleChange}
-              fullWidth
-              margin="normal"
-              sx={{ mb: -1 }}
-              disabled={!currentUser || currentUser.role !== 'admin'}
-            />
+            <Tooltip title='Например: 204' arrow>
+              <TextField
+                label="Помещение"
+                name="room"
+                value={asset.room || ''}
+                onChange={handleChange}
+                fullWidth
+                margin="normal"
+                sx={{ mb: -1 }}
+                disabled={!currentUser || currentUser.role !== 'admin'}
+              />
+            </Tooltip>
           </Grid>
           <Grid item xs={12} sm={6}>
             <TextField
