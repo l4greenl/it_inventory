@@ -1,5 +1,5 @@
 // frontend/src/components/AssetDetails.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -66,7 +66,6 @@ const AssetDetails = ({ currentUser }) => {
   const [typeProperties, setTypeProperties] = useState([]);
   const [touched, setTouched] = useState({});
   const [fieldErrors, setFieldErrors] = useState({});
-  const assetRef = useRef();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -81,38 +80,12 @@ const AssetDetails = ({ currentUser }) => {
           axios.get(`${API_BASE_URL}/api/employees`, { withCredentials: true }),
         ]);
 
-        // Сортируем по алфавиту по полю 'name'
-        const sortedTypes = typesRes.data.sort((a, b) =>
-          a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-        );
-
-        const sortedStatuses = statusesRes.data.sort((a, b) =>
-          a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-        );
-
-        const sortedDepartments = departmentsRes.data.sort((a, b) =>
-          a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-        );
-
-        const sortedEmployees = employeesRes.data.sort((a, b) =>
-          a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-        );
-
-        // Убедитесь, что данные актива полностью загружены
-        console.log("Загруженный актив:", assetRes.data);
-
-        // 4. Устанавливаем данные актива в состояние
         setAsset(assetRes.data);
-
-        // 5. Сразу после установки состояния, сохраняем копию в assetRef
-        // Это фиксирует исходные данные актива
-        assetRef.current = assetRes.data;
-        console.log("assetRef обновлен:", assetRef.current); // Для отладки
-
-        setTypes(sortedTypes);
-        setStatuses(sortedStatuses);
-        setDepartments(sortedDepartments);
-        setEmployees(sortedEmployees);
+        setEditedAsset(assetRes.data);
+        setTypes(typesRes.data);
+        setStatuses(statusesRes.data);
+        setDepartments(departmentsRes.data);
+        setEmployees(employeesRes.data);
 
         setQrCodeUrl(`${API_BASE_URL}/api/assets/${id}/qr`);
 
@@ -125,49 +98,40 @@ const AssetDetails = ({ currentUser }) => {
     };
 
     fetchData();
-  }, [id]); // Зависит только от id
+  }, [id]);
 
   useEffect(() => {
     const fetchTypeProperties = async () => {
-      // 7. Используем type_id из основного состояния asset
-      const currentTypeId = asset?.type_id;
-
-      console.log("useEffect fetchTypeProperties сработал, type_id:", currentTypeId); // Для отладки
-
-      if (!currentTypeId) {
+      if (!asset.type_id) { 
         setTypeProperties([]);
-        setDynamicFields({}); // Устанавливаем пустой объект
+        setDynamicFields([]); // <<< ИЗМЕНЕНО: Всегда массив
         return;
       }
 
       try {
-        const res = await axios.get(`${API_BASE_URL}/api/types/${currentTypeId}/properties`, { withCredentials: true });
+        const res = await axios.get(`${API_BASE_URL}/api/types/${asset.type_id}/properties`, { withCredentials: true }); 
         setTypeProperties(res.data);
-        console.log("Полученные свойства типа:", res.data); // Для отладки
 
-        // 8. Создаем объект dynamicFields, инициализируя значениями из СОХРАНЕННОГО assetRef.current
-        const initialDynamicFields = {};
-        res.data.forEach(property => {
+        const initialDynamicFields = res.data.map(property => {
           const fieldName = mapPropertyNameToAssetField(property.name);
-          // 9. Используем значение из assetRef.current, а не из текущего (возможно, измененного) asset
-          initialDynamicFields[fieldName] = assetRef.current?.[fieldName] || ''; // или editedAsset[fieldName] || ''
-          console.log(`Инициализация поля ${fieldName} из assetRef:`, assetRef.current?.[fieldName]); // Для отладки
+          return {
+            id: property.id,
+            name: property.name,
+            fieldName: fieldName,
+            value: asset[fieldName] || '' // Используем значение из загруженного asset
+          };
         });
-
-        // 10. Устанавливаем СОСТОЯНИЕ как ОБЪЕКТ
-        setDynamicFields(initialDynamicFields);
-        console.log("Инициализированные dynamicFields:", initialDynamicFields); // Для отладки
+        setDynamicFields(initialDynamicFields); // Устанавливаем массив
 
       } catch (err) {
         console.error('Ошибка при загрузке свойств типа:', err);
         setTypeProperties([]);
-        setDynamicFields({}); // Устанавливаем пустой объект при ошибке
+        setDynamicFields([]); // <<< ИЗМЕНЕНО: Всегда массив
       }
     };
 
     fetchTypeProperties();
-    // 11. Зависимость ТОЛЬКО от asset.type_id, чтобы эффект сработал при смене типа
-  }, [asset?.type_id]);
+  }, [asset.type_id, asset]); // <<< ВАЖНО: Добавлен asset в зависимости
 
   const mapPropertyNameToAssetField = (propertyName) => {
     const mapping = {
@@ -313,12 +277,16 @@ const AssetDetails = ({ currentUser }) => {
     }
   };
 
-  const handleDynamicFieldChange = (fieldName, value) => {
-    // Обновляем объект dynamicFields
-    setDynamicFields(prevFields => ({
-      ...prevFields,
-      [fieldName]: value // Используем вычисляемое имя свойства [fieldName]
-    }));
+  const handleDynamicFieldChange = (fieldName) => (event) => {
+    const { value } = event.target;
+    // Обновляем СОСТОЯНИЕ, которое является МАССИВОМ ОБЪЕКТОВ
+    setDynamicFields(prevFields => 
+      prevFields.map(fieldObj => 
+        fieldObj.fieldName === fieldName ? { ...fieldObj, value } : fieldObj
+      )
+    );
+    // !!! ВАЖНО: Также обновите основное состояние asset, если динамические поля должны быть в нем
+    // setAsset(prevAsset => ({ ...prevAsset, [fieldName]: value }));
   };
 
   const handleChange = (e) => {
@@ -352,25 +320,6 @@ const AssetDetails = ({ currentUser }) => {
     
     if (errors[name]) {
         setErrors(prevErrors => ({ ...prevErrors, [name]: '' }));
-    }
-  };
-  
-  const handleResponsiblePersonChange = (event) => {
-    const { name, value } = event.target; // name будет 'responsible_person', value - ID сотрудника
-
-    setAsset(prevAsset => ({
-      ...prevAsset,
-      [name]: value // asset.responsible_person = value
-    }));
-    if (value) { // Если выбран какой-то сотрудник
-      const selectedEmployee = employees.find(emp => emp.id === parseInt(value, 10));
-      if (selectedEmployee && selectedEmployee.department_id) {
-        // 3. Обновляем ID отдела в состоянии asset
-        setAsset(prevAsset => ({
-          ...prevAsset,
-          department_id: selectedEmployee.department_id // asset.department_id = selectedEmployee.department_id
-        }));
-      }
     }
   };
   
@@ -422,8 +371,8 @@ const handleSave = async () => {
       comments: asset.comments || '',
     };
 
-    Object.entries(dynamicFields).forEach(([fieldName, value]) => {
-      dataToSend[fieldName] = value;
+    dynamicFields.forEach(fieldObj => {
+       dataToSend[fieldObj.fieldName] = fieldObj.value; // <<< .forEach на массиве
     });
     // <<< КОНЕЦ ИЗМЕНЕНИЙ >>>
 
@@ -443,7 +392,6 @@ const handleSave = async () => {
     setFieldErrors({});
     setTouched({});
     setIsEditing(false);
-    navigate('/assets')
 
   } catch (err) {
     console.error('Ошибка при сохранении изменений:', err);
@@ -468,42 +416,30 @@ const handleSave = async () => {
   }
 };
   
-  const renderDynamicField = (property) => {
-    // 1. Получаем имя поля модели Asset на основе имени свойства типа
-    const fieldName = mapPropertyNameToAssetField(property.name);
-
-    // 2. Получаем значение для этого поля из объекта dynamicFields
-    // Предполагается, что dynamicFields - это объект, например: { OS: 'Windows 10', CPU: 'i7' }
-    const value = dynamicFields[fieldName] || '';
-
-    // 3. Определяем, есть ли подсказка для этого поля
-    // Убедитесь, что FIELD_TOOLTIPS определён в вашем компоненте/области видимости
-    const tooltipTitle = FIELD_TOOLTIPS && FIELD_TOOLTIPS[fieldName]; 
-
-    // 4. Создаем элемент поля ввода
+  const renderDynamicField = (fieldObj) => {
+    const fieldName = mapPropertyNameToAssetField(fieldObj.name); // Получаем имя поля для модели Asset
+    const value = dynamicFields[fieldObj] || ''; // Получаем значение из объекта dynamicFields
+    const tooltipTitle = FIELD_TOOLTIPS[fieldObj]; // Используем fieldName для подсказки
     const inputElement = (
       <TextField
-        label={property.name}        // Отображаемое имя из свойства типа
-        name={fieldName}             // Имя поля (важно для mapPropertyName...)
-        value={value}                // Значение из состояния dynamicFields
-        onChange={(e) => handleDynamicFieldChange(fieldName, e.target.value)} // Обработчик изменений
+        label={fieldObj.name} // Отображаемое имя из свойства типа
+        name={fieldObj.fieldName} // Используем fieldName как имя поля ввода
+        value={fieldObj.value || ''} // Используем значение из состояния
+        onChange={handleDynamicFieldChange(fieldObj.fieldName)} // Передаем fieldName в обработчик
         fullWidth
         margin="normal"
-        disabled={!currentUser || currentUser.role !== 'admin'} // Условие редактирования
-        sx={{ mb: -1 }} // Ваш стиль
-        // Добавьте другие необходимые пропсы (например, error, helperText если нужно)
+        disabled={!currentUser || currentUser.role !== 'admin'}
+        sx={{ mb: -1 }}
       />
     );
 
-    // 5. Возвращаем JSX: либо поле в Tooltip, либо просто поле, обёрнутое в Grid
-    // Используем property.id как ключ для Grid
     if (tooltipTitle) {
       return (
-        <Grid item xs={12} sm={6} key={property.id}>
-          <Tooltip
-            title={tooltipTitle}
+        <Grid item xs={12} sm={6} key={fieldObj.id}>
+          <Tooltip 
+          title={tooltipTitle}
             arrow
-            placement="bottom" // Или 'top', как вам нужно
+            placement='bottom'
             PopperProps={{
               modifiers: [
                 {
@@ -514,18 +450,16 @@ const handleSave = async () => {
                 },
               ],
               disablePortal: false
-            }}
-          >
-            {/* span нужен для Tooltip, особенно если input может быть disabled */}
-            <span>{inputElement}</span> 
+            }}>
+            <span>{inputElement}</span>
           </Tooltip>
         </Grid>
       );
     }
+    
 
-    // Если подсказки нет
     return (
-      <Grid item xs={12} sm={6} key={property.id}>
+      <Grid item xs={12} sm={6} key={fieldObj.id}>
         {inputElement}
       </Grid>
     );
@@ -742,7 +676,7 @@ const handleSave = async () => {
                 label="Ответственный *"
                 name="responsible_person"
                 value={asset.responsible_person || ''}
-                onChange={handleResponsiblePersonChange}
+                onChange={handleSelectChange}
                 sx={{ mb: -2 }}
                 disabled={!currentUser || currentUser.role !== 'admin'}
               >

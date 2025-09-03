@@ -24,7 +24,11 @@ import {
   CircularProgress,
   Checkbox, // <<< ДОБАВИЛ: Импорт Checkbox
   TablePagination,
-  useTheme
+  useTheme,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -71,7 +75,7 @@ const NeedsList = ({ currentUser }) => {
   // <<< ДОБАВИЛ: Состояния для модального окна изменения статуса
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [newStatus, setNewStatus] = useState('');
-  const [availableStatuses, setAvailableStatuses] = useState([]); // Для списка статусов в модалке
+  const [availableStatuses, setAvailableStatuses] = useState(['Принято', 'В процессе', 'Исполнено']); // Для списка статусов в модалке
 
   // <<< ДОБАВИЛ: Состояния для модального окна подтверждения удаления
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -272,6 +276,14 @@ const handleRowClick = (needId) => {
 
   // <<< ДОБАВИЛ: Обработчики для модального окна изменения статуса
   const handleOpenStatusDialog = () => {
+    if (selectedNeeds.length === 0) {
+      setSnackbar({
+        open: true,
+        message: 'Пожалуйста, выберите хотя бы одну потребность.',
+        severity: 'warning',
+      });
+      return;
+    }
     setStatusDialogOpen(true);
   };
 
@@ -282,56 +294,70 @@ const handleRowClick = (needId) => {
 
   // Обработчик подтверждения изменения статуса
   const handleConfirmStatusChange = async () => {
-    // <<< ИЗМЕНЕНО: Простая проверка на пустоту
-    if (!newStatus.trim()) {
+    // Проверяем, выбран ли статус
+    if (!newStatus) {
       setSnackbar({
         open: true,
-        message: 'Пожалуйста, введите статус',
-        severity: 'warning'
+        message: 'Пожалуйста, выберите статус',
+        severity: 'warning',
       });
       return;
     }
 
     try {
       // Отправляем PATCH-запрос для обновления статуса у выбранных потребностей
-      await axios.patch(`${API_BASE_URL}/api/needs/batch-update`, {
-        ids: selectedNeeds,
-        status: newStatus.trim() // Отправляем введённый текст
-      }, { withCredentials: true });
+      // Предполагается, что бэкенд ожидает массив ID и новое значение статуса
+      await axios.patch(
+        `${API_BASE_URL}/api/needs/batch-update`,
+        {
+          ids: selectedNeeds,
+          status: newStatus // Отправляем выбранный статус
+        },
+        { withCredentials: true }
+      );
 
       // Обновляем локальное состояние
-      setNeeds(needs.map(need =>
-        selectedNeeds.includes(need.id) ? { ...need, status: newStatus.trim() } : need
-      ));
-      setFilteredNeeds(filteredNeeds.map(need =>
-        selectedNeeds.includes(need.id) ? { ...need, status: newStatus.trim() } : need
-      ));
+      setNeeds((prevNeeds) =>
+        prevNeeds.map((need) =>
+          selectedNeeds.includes(need.id) ? { ...need, status: newStatus } : need
+        )
+      );
+      setFilteredNeeds((prevFiltered) =>
+        prevFiltered.map((need) =>
+          selectedNeeds.includes(need.id) ? { ...need, status: newStatus } : need
+        )
+      );
 
       setSnackbar({
         open: true,
         message: `Статус успешно изменен для ${selectedNeeds.length} потребностей`,
-        severity: 'success'
+        severity: 'success',
       });
+
       setSelectedNeeds([]); // Сброс выбора
       handleCloseStatusDialog();
     } catch (error) {
-      console.error('Ошибка при изменении статуса:', error);
-      // Проверка на ошибку авторизации
-      if (error.response && error.response.status === 401) {
-        setSnackbar({
-          open: true,
-          message: 'Ошибка авторизации. Пожалуйста, войдите снова.',
-          severity: 'error'
-        });
-      } else {
-        setSnackbar({
-          open: true,
-          message: 'Ошибка при изменении статуса',
-          severity: 'error'
-        });
+      console.error('Ошибка при массовом изменении статуса:', error);
+      let errorMessage = 'Не удалось изменить статус.';
+      if (error.response) {
+        if (error.response.status === 400) {
+          errorMessage = `Ошибка данных: ${error.response.data.error || 'Некорректный запрос.'}`;
+        } else if (error.response.status === 401) {
+          errorMessage = 'Ошибка авторизации.';
+        } else if (error.response.status === 403) {
+          errorMessage = 'Доступ запрещен.';
+        } else if (error.response.status >= 500) {
+          errorMessage = 'Внутренняя ошибка сервера.';
+        }
       }
+      setSnackbar({
+        open: true,
+        message: errorMessage,
+        severity: 'error',
+      });
     }
   };
+
   // <<< ДОБАВИЛ: Обработчики для модального окна удаления
   const handleOpenDeleteDialog = () => {
     setDeleteDialogOpen(true);
@@ -675,20 +701,31 @@ const handleRowClick = (needId) => {
           </DialogTitle>
           <DialogContent>
             <DialogContentText id="status-dialog-description" sx={{ mb: 2 }}>
-              Введите новый статус:
+              Введите новый статус из списка:
             </DialogContentText>
+
             {/* <<< ИЗМЕНЕНО: TextField вместо Select */}
-            <TextField
-              autoFocus
-              margin="dense"
-              id="new-status-name"
-              label="Новый статус"
-              type="text"
-              fullWidth
-              variant="outlined"
-              value={newStatus}
-              onChange={(e) => setNewStatus(e.target.value)}
-            />
+            <FormControl fullWidth variant="outlined">
+              <InputLabel id="new-status-label">Новый статус *</InputLabel>
+              <Select
+                autoFocus
+                margin="dense"
+                id="new-status-name"
+                label="Новый статус"
+                type="text"
+                fullWidth
+                variant="outlined"
+                value={newStatus}
+                onChange={(e) => setNewStatus(e.target.value)}
+              >
+                {/* Мапим массив доступных статусов */}
+                {availableStatuses.map((status) => (
+                  <MenuItem key={status} value={status}>
+                    {status}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseStatusDialog} color="primary">
