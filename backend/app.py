@@ -6,11 +6,11 @@ from flask_migrate import Migrate
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_cors import CORS
 from datetime import date, datetime
-from datetime import date as dt_date
 import io
 import qrcode
 import base64
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import or_, and_
 
 # === Импорты моделей ===
 from models import db, User, Asset, Type, Department, Status, Employee, Change, Property, Need
@@ -438,7 +438,15 @@ def get_changes():
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
 
-    query = Change.query
+    
+    query = Change.query.filter(
+        or_(
+            # old_value не NULL и не пустая строка
+            and_(Change.old_value.isnot(None), Change.old_value != ''),
+            # OR new_value не NULL и не пустая строка
+            and_(Change.new_value.isnot(None), Change.new_value != '')
+        )
+    )
 
     if asset_id:
         query = query.filter(Change.asset_id == asset_id)
@@ -778,7 +786,7 @@ def create_need():
             department_id=department_id,
             asset_type_id=asset_type_id,
             quantity=quantity,
-            reason_date=dt_date.fromisoformat(data['reason_date']),
+            reason_date=date.fromisoformat(data['reason_date']),
             status=status, # Используем обработанную строку
             note=note      # Используем обработанную строку или None
         )
@@ -882,7 +890,7 @@ def update_need(id):
                     elif field == 'reason_date':
                          if data[field]:
                              # Ожидаем формат YYYY-MM-DD
-                             setattr(need, field, dt_date.fromisoformat(data[field]))
+                             setattr(need, field, date.fromisoformat(data[field]))
                          else:
                              setattr(need, field, None)
 

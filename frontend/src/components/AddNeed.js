@@ -36,7 +36,7 @@ const AddNeed = ({ currentUser }) => {
     asset_type_id: '',
     quantity: '',
     reason_date: '',
-    status: '',
+    status: '', // Инициализируем пустой строкой
     note: '',
   });
 
@@ -52,6 +52,7 @@ const AddNeed = ({ currentUser }) => {
   const [departments, setDepartments] = useState([]);
   const [types, setTypes] = useState([]);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const availableStatuses = ['Принято', 'В процессе', 'Исполнено'];
 
   // Загрузка справочников
   useEffect(() => {
@@ -312,14 +313,20 @@ const AddNeed = ({ currentUser }) => {
               InputLabelProps={{
                 shrink: true,
               }}
-              sx={isError('reason_date') ? {'& .MuiOutlinedInput-notchedOutline': { borderColor: 'error.main' } } : {mb: -1}}
+              sx={isError('reason_date') ? {'& .MuiOutlinedInput-notchedOutline': { borderColor: 'error.main' } } : {mb: 1}}
             />
           </Grid>
 
-          <Grid item xs={12}>
-            <Tooltip title='Например: В работе' arrow>
-              <TextField
+          <Grid item xs={12} sm={6}>
+            <FormControl
+              fullWidth
+              variant="outlined"
+              error={isError('status')} // Используем существующую логику isError
+            >
+              <InputLabel id="need-status-label">Статус *</InputLabel>
+              <Select
                 label="Статус *"
+                labelId="need-status-label"
                 name="status"
                 value={need.status}
                 onChange={handleChange}
@@ -327,8 +334,14 @@ const AddNeed = ({ currentUser }) => {
                 margin="normal"
                 error={isError('status')}
                 sx={isError('status') ? { '& .MuiOutlinedInput-notchedOutline': { borderColor: 'error.main' } } : {mb: -1}}
-              />
-            </Tooltip>
+              >
+                {availableStatuses.map((statusText) => (
+                  <MenuItem key={statusText} value={statusText}>
+                    {statusText}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Grid>
 
           <Grid item xs={12}>

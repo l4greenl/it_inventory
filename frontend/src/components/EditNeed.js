@@ -51,6 +51,7 @@ const EditNeed = ({ currentUser }) => {
   // <<< ДОБАВИЛ: Состояния для валидации
   const [touched, setTouched] = useState({});
   const [errors, setErrors] = useState({});
+  const availableStatuses = ['Принято', 'В процессе', 'Исполнено'];
 
   useEffect(() => {
     const fetchData = async () => {
@@ -379,7 +380,7 @@ const EditNeed = ({ currentUser }) => {
                 shrink: true,
               }}
               disabled={!currentUser || currentUser.role !== 'admin'}
-              sx={isError('reason_date') ? { '& .MuiOutlinedInput-notchedOutline': { borderColor: 'error.main' } } : {mb: -1}}
+              sx={isError('reason_date') ? { '& .MuiOutlinedInput-notchedOutline': { borderColor: 'error.main' } } : {mb: 1}}
               InputProps={{
                 inputProps: {
                   min: "1000-01-01",
@@ -389,9 +390,14 @@ const EditNeed = ({ currentUser }) => {
             />
           </Grid>
 
-          <Grid item xs={12}>
-            <Tooltip title='Например: В работе' arrow>
-              <TextField
+          <Grid item xs={12} sm={6}>
+            <FormControl
+              fullWidth
+              variant="outlined"
+              error={isError('status')} // Используем существующую логику isError
+            >
+              <InputLabel id="need-status-label">Статус *</InputLabel>
+              <Select
                 label="Статус *"
                 name="status"
                 value={need.status}
@@ -401,8 +407,14 @@ const EditNeed = ({ currentUser }) => {
                 error={isError('status')}
                 disabled={!currentUser || currentUser.role !== 'admin'}
                 sx={isError('status') ? { '& .MuiOutlinedInput-notchedOutline': { borderColor: 'error.main' } } : {mb: -1}}
-              />
-            </Tooltip>
+              >
+                {availableStatuses.map((statusText) => (
+                  <MenuItem key={statusText} value={statusText}>
+                    {statusText}
+                  </MenuItem>
+                ))}
+              </Select>  
+            </FormControl>
           </Grid>
 
           <Grid item xs={12}>

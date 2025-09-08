@@ -1,9 +1,11 @@
 # backend/models.py
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
-from datetime import datetime
+from datetime import datetime, timedelta
 
 db = SQLAlchemy()
+
+current_time_msk = datetime.utcnow() + timedelta(hours=3)
 
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
@@ -153,7 +155,7 @@ class Change(db.Model):
     field = db.Column(db.String(100))
     old_value = db.Column(db.Text)
     new_value = db.Column(db.Text)
-    changed_at = db.Column(db.DateTime, default=datetime.utcnow)
+    changed_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False) # Или TIMESTAMP WITHOUT TIME ZONE
 
     asset = db.relationship('Asset', backref='changes')
 

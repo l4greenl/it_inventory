@@ -100,18 +100,18 @@ const NeedsList = ({ currentUser }) => {
       setLoading(true);
       setError('');
       try {
-        // <<< ИЗМЕНЕНО: Добавлена загрузка статусов для модального окна
-        const [needsRes, deptsRes, typesRes, statusesRes] = await Promise.all([
+        // Убираем загрузку statusesRes из Promise.all
+        const [needsRes, deptsRes, typesRes] = await Promise.all([
           axios.get(`${API_BASE_URL}/api/needs`, { withCredentials: true }),
           axios.get(`${API_BASE_URL}/api/departments`, { withCredentials: true }),
           axios.get(`${API_BASE_URL}/api/types`, { withCredentials: true }),
-          axios.get(`${API_BASE_URL}/api/statuses`, { withCredentials: true }), // <<< ДОБАВИЛ
+          // axios.get(`${API_BASE_URL}/api/statuses`, { withCredentials: true }), // <<< УДАЛЯЕМ эту строку
         ]);
         setNeeds(needsRes.data);
         setFilteredNeeds(needsRes.data);
         setDepartments(deptsRes.data);
         setTypes(typesRes.data);
-        setAvailableStatuses(statusesRes.data); // <<< ДОБАВИЛ
+        // setAvailableStatuses(statusesRes.data.map(statusObj => statusObj.name)); // <<< УДАЛЯЕМ эту строку
       } catch (err) {
         console.error('Ошибка загрузки потребностей:', err);
         setError('Не удалось загрузить список потребностей.');
@@ -126,7 +126,7 @@ const NeedsList = ({ currentUser }) => {
     };
 
     fetchData();
-  }, []);
+  }, []); // Зависимости остаются пустыми, если вы не используете внешние переменные
 
   // <<< ДОБАВИЛ: Эффект для управления состоянием "выбрать все"
   useEffect(() => {
@@ -706,11 +706,12 @@ const handleRowClick = (needId) => {
 
             {/* <<< ИЗМЕНЕНО: TextField вместо Select */}
             <FormControl fullWidth variant="outlined">
-              <InputLabel id="new-status-label">Новый статус *</InputLabel>
+              <InputLabel id="new-status-label">Новый статус</InputLabel>
               <Select
                 autoFocus
                 margin="dense"
                 id="new-status-name"
+                labelId="new-status-label"
                 label="Новый статус"
                 type="text"
                 fullWidth
@@ -718,11 +719,11 @@ const handleRowClick = (needId) => {
                 value={newStatus}
                 onChange={(e) => setNewStatus(e.target.value)}
               >
-                {/* Мапим массив доступных статусов */}
-                {availableStatuses.map((status) => (
-                  <MenuItem key={status} value={status}>
-                    {status}
-                  </MenuItem>
+              {/* Используем фиксированный массив availableStatuses */}
+              {availableStatuses.map((statusText) => (
+                <MenuItem key={statusText} value={statusText}>
+                  {statusText}
+                </MenuItem>
                 ))}
               </Select>
             </FormControl>
