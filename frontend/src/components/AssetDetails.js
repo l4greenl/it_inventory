@@ -180,9 +180,10 @@ const AssetDetails = ({ currentUser }) => {
       'Оперативная память': 'RAM',
       'Диск (HDD/SSD)': 'Drive',
       'Диск': 'Drive',
-      'IP-адрес': 'IP_address',
-      'IP_адрес': 'IP_address',
+      'IP-адрес': 'IP_address', // В JS удобнее работать с IP_address
       'Внутренний номер': 'number',
+      'Имя устройства': 'username',
+      'Доп. серийный номер': 'add_serial_number',
     };
     return mapping[propertyName] || propertyName.toLowerCase().replace(/\s+/g, '_');
   };
@@ -567,6 +568,8 @@ const handleSave = async () => {
     'diagonal': 'Например: 15,6"',
     'IP_address': 'Например: 192.168.1.100',
     'number': 'Например: 2129',
+    'username': 'Например: PATENT-02',
+    'add_serial_number': 'Например: EX583772630042024',
   };
 
   if (loading) return (
@@ -641,6 +644,21 @@ const handleSave = async () => {
                 value={asset.type_id || ''}
                 onChange={handleSelectChange}
                 disabled={!currentUser || currentUser.role !== 'admin'}
+                MenuProps={{
+                  anchorOrigin: {
+                    vertical: 'bottom',
+                    horizontal: 'left',
+                  },
+                  transformOrigin: {
+                    vertical: 'top',
+                    horizontal: 'left',
+                  },
+                  PaperProps: {
+                    style: {
+                      maxHeight: 260,
+                    },
+                  },
+                }}
               >
                 {types.map(type => (
                   <MenuItem key={type.id} value={type.id}>
@@ -699,6 +717,21 @@ const handleSave = async () => {
                 onChange={handleSelectChange}
                 sx={{ mb: -2 }}
                 disabled={!currentUser || currentUser.role !== 'admin'}
+                MenuProps={{
+                  anchorOrigin: {
+                    vertical: 'bottom',
+                    horizontal: 'left',
+                  },
+                  transformOrigin: {
+                    vertical: 'top',
+                    horizontal: 'left',
+                  },
+                  PaperProps: {
+                    style: {
+                      maxHeight: 260,
+                    },
+                  },
+                }}                
               >
                 {statuses.map(stat => (
                   <MenuItem key={stat.id} value={stat.id}>
@@ -719,6 +752,21 @@ const handleSave = async () => {
                 onChange={handleChange}
                 sx={{ mb: -2 }}
                 disabled={!currentUser || currentUser.role !== 'admin'}
+                MenuProps={{
+                  anchorOrigin: {
+                    vertical: 'bottom',
+                    horizontal: 'left',
+                  },
+                  transformOrigin: {
+                    vertical: 'top',
+                    horizontal: 'left',
+                  },
+                  PaperProps: {
+                    style: {
+                      maxHeight: 260,
+                    },
+                  },
+                }}                
 
               >
                 {employees.map((emp) => (
@@ -745,6 +793,21 @@ const handleSave = async () => {
                 onChange={handleResponsiblePersonChange}
                 sx={{ mb: -2 }}
                 disabled={!currentUser || currentUser.role !== 'admin'}
+                MenuProps={{
+                  anchorOrigin: {
+                    vertical: 'bottom',
+                    horizontal: 'left',
+                  },
+                  transformOrigin: {
+                    vertical: 'top',
+                    horizontal: 'left',
+                  },
+                  PaperProps: {
+                    style: {
+                      maxHeight: 260,
+                    },
+                  },
+                }}                
               >
                 {employees.map(emp => (
                   <MenuItem key={emp.id} value={emp.id}>
@@ -777,6 +840,21 @@ const handleSave = async () => {
                   '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0, 0, 0, 0.23)' },
                   '& .MuiSelect-select': { color: 'rgba(0, 0, 0, 0.87)' }
                 }}
+                MenuProps={{
+                  anchorOrigin: {
+                    vertical: 'bottom',
+                    horizontal: 'left',
+                  },
+                  transformOrigin: {
+                    vertical: 'top',
+                    horizontal: 'left',
+                  },
+                  PaperProps: {
+                    style: {
+                      maxHeight: 260,
+                    },
+                  },
+                }}                
               >
                 {departments.map(dept => (
                   <MenuItem key={dept.id} value={dept.id}>

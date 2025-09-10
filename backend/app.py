@@ -205,8 +205,9 @@ def create_asset():
             Drive=data.get('Drive'),      # Предполагается, что это VARCHAR/TEXT
             OS=data.get('OS'),            # Предполагается, что это VARCHAR/TEXT
             IP_address=data.get('IP_address'), # Предполагается, что это VARCHAR/TEXT
-            number=get_int_or_none(data.get('number')) # <<< Используем ГЛОБАЛЬНУЮ функцию, если это INTEGER
-            # Добавьте другие динамические поля, если они есть в модели и отправляются
+            username=data.get('username'), # <<< НОВОЕ
+            add_serial_number=data.get('add_serial_number'), # <<< НОВОЕ
+            number=data.get('number') # Убедитесь, что number (динамическое поле) тоже обрабатывается, если нужно
         )
         db.session.add(new_asset)
         db.session.flush() # Получаем new_asset.id
@@ -277,8 +278,9 @@ def update_asset(id):
         'Drive': asset.Drive,
         'OS': asset.OS,
         'IP_address': asset.IP_address,
-        'number': asset.number,
-        # Добавьте сюда другие динамические поля, если они есть и отслеживаются
+        'username': asset.username, # <<< НОВОЕ
+        'add_serial_number': asset.add_serial_number, # <<< НОВОЕ
+        'number': asset.number # Убедитесь, что number тоже отслеживается, если это нужно отдельно
     }
 
     # --- НОВАЯ ЛОГИКА ОБНОВЛЕНИЯ ---
@@ -528,23 +530,36 @@ def get_type_properties(type_id):
     return jsonify(properties)
 
 @app.route('/api/types/<int:type_id>/properties', methods=['PUT'])
-@login_required
 def update_type_properties(type_id):
     """Обновить список свойств для типа"""
-    type_obj = Type.query.get_or_404(type_id)
+    type_obj = Type.query.get_or_404(type_id) # Используйте db.session.get(Type, type_id) для SQLAlchemy 2.x
     data = request.get_json()
+    
+    # Проверяем, что данные получены и property_ids - это список
+    if not data or 'property_ids' not in data:
+        return jsonify({'error': 'Отсутствует список property_ids'}), 400
+
     property_ids = data.get('property_ids', [])
     
-    try:
-        properties = Property.query.filter(Property.id.in_(property_ids)).all()
-        if len(properties) != len(set(property_ids)):
-            return jsonify({'error': 'Некоторые свойства не найдены'}), 400
+    # Проверяем, что property_ids - это список
+    if not isinstance(property_ids, list):
+         return jsonify({'error': 'property_ids должен быть списком'}), 400
 
-        type_obj.properties.clear()
-        for prop in properties:
-            if prop not in type_obj.properties:
-                type_obj.properties.append(prop)
-                
+    try:
+        # Получаем все свойства по предоставленным ID
+        properties = Property.query.filter(Property.id.in_(property_ids)).all()
+        
+        # Проверяем, все ли запрошенные свойства найдены
+        if len(properties) != len(set(property_ids)): # set убирает дубликаты
+            found_ids = {p.id for p in properties}
+            requested_ids = set(property_ids)
+            missing_ids = requested_ids - found_ids
+            return jsonify({'error': f'Свойства с ID {list(missing_ids)} не найдены'}), 400
+
+        # Явно устанавливаем новый список свойств для типа
+        # Это более надежный способ обновления отношений многие-ко-многим
+        type_obj.properties = properties 
+            
         db.session.commit()
         return jsonify({'message': 'Свойства типа обновлены'}), 200
     except Exception as e:
@@ -553,10 +568,15 @@ def update_type_properties(type_id):
         return jsonify({'error': 'Не удалось обновить свойства типа'}), 500
 
 # --- Свойства ---
-@app.route('/api/properties', methods=['GET'])
+@app.route('/api/properties', methods=['GET']) # Используется в Directory.js для выпадающего списка
 def get_properties():
-    properties = Property.query.all()
-    return jsonify([p.to_dict() for p in properties])
+    """Получить список всех свойств"""
+    try:
+        properties = Property.query.all()
+        return jsonify([p.to_dict() for p in properties])
+    except Exception as e:
+        app.logger.error(f"Ошибка при получении списка свойств: {e}")
+        return jsonify({'error': 'Не удалось загрузить список свойств'}), 500
 
 # --- Статусы ---
 @app.route('/api/statuses', methods=['GET'])

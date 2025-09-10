@@ -384,6 +384,8 @@ const AssetList = ({ currentUser }) => {
     { key: 'actual_user', label: 'Фактический пользователь' },
     { key: 'purchase_date', label: 'Дата покупки' },
     { key: 'number', label: 'Номер' },
+    { key: 'username', label: 'Имя устройства' },
+    { key: 'add_serial_number', label: 'Доп. серийный номер' },
   ];
 
   const handleAddColumnClick = (event) => {

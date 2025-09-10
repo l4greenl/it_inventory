@@ -23,7 +23,7 @@ const formatDate = (dateString) => {
   // например, "2023-10-27T20:00:00".
   // new Date("2023-10-27T20:00:00") интерпретирует это как 20:00 UTC.
   let utcDate = new Date(dateString);
-
+ 
   // 2. Проверяем, является ли результат допустимой датой
   if (isNaN(utcDate.getTime())) {
     console.error('Некорректная строка даты (UTC):', dateString);
@@ -75,6 +75,8 @@ const FIELD_NAME_MAP = {
   'Drive': 'диска',
   'IP_address': 'IP-адреса',
   'number': 'номера',
+  'add_serial_number': 'доп. серийного номера',
+  'username': 'имени пользователя',
   // Можно добавить другие поля, если они есть в базе
 };
 

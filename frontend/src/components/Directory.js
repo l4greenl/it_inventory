@@ -1,42 +1,37 @@
 // frontend/src/components/Directory.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react'; // <<< ДОБАВИЛ useMemo
+import axios from 'axios';
+// Импортируем компоненты из @mui/material
 import {
   Container,
   Typography,
-  Box,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableRow,
-  Button,
   TextField,
+  Button,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  IconButton,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  Snackbar,
-  Alert,
+  DialogContentText,
+  Box,
+  Paper,
+  Grid,
   Select,
   MenuItem,
-  Checkbox,
-  ListItemText,
-  Input,
   FormControl,
   InputLabel,
-  Chip,
-  Grid,
-  // <<<--- ИМПОРТЫ ДЛЯ ИКОНОК И НОВЫХ КОМПОНЕНТОВ
-  IconButton,
-  Tooltip
+  // Другие необходимые компоненты MUI
 } from '@mui/material';
-// <<<--- ИМПОРТЫ ИКОНОК
+// Импортируем иконки из @mui/icons-material
+import AddIcon from '@mui/icons-material/Add';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import EditIcon from '@mui/icons-material/Edit';
-import TuneIcon from '@mui/icons-material/Tune';
 import DeleteIcon from '@mui/icons-material/Delete';
-
-import axios from 'axios';
 // Импортируем базовый URL из config.js
 import { API_BASE_URL } from '../config';
 
@@ -49,981 +44,846 @@ const Directory = ({ currentUser }) => {
   const [openTypeModal, setOpenTypeModal] = useState(false);
 
   // === Состояния для Свойств (для модального окна редактирования типа) ===
-  const [allProperties, setAllProperties] = useState([]); // Все доступные свойства
-  const [selectedPropertyIds, setSelectedPropertyIds] = useState([]); // ID выбранных свойств для текущего типа
-  const [editingTypeProperties, setEditingTypeProperties] = useState([]); // Подробная информация о выбранных свойствах
+  const [allProperties, setAllProperties] = useState([]);
+  const [typeProperties, setTypeProperties] = useState([]);
+  const [availableProperties, setAvailableProperties] = useState([]);
 
   // === Состояния для Статусов ===
   const [statuses, setStatuses] = useState([]);
   const [newStatus, setNewStatus] = useState('');
   const [editingStatusId, setEditingStatusId] = useState(null);
   const [editingStatusName, setEditingStatusName] = useState('');
+  const [openStatusModal, setOpenStatusModal] = useState(false);
 
   // === Состояния для Отделов ===
   const [departments, setDepartments] = useState([]);
   const [newDepartment, setNewDepartment] = useState('');
   const [editingDepartmentId, setEditingDepartmentId] = useState(null);
   const [editingDepartmentName, setEditingDepartmentName] = useState('');
+  const [openDepartmentModal, setOpenDepartmentModal] = useState(false);
 
   // === Состояния для Сотрудников ===
   const [employees, setEmployees] = useState([]);
+  // <<< ИЗМЕНЕНО: newEmployee теперь объект с name и department_id
   const [newEmployee, setNewEmployee] = useState({ name: '', department_id: '' });
   const [editingEmployeeId, setEditingEmployeeId] = useState(null);
+  // <<< ИЗМЕНЕНО: editingEmployee теперь объект
   const [editingEmployee, setEditingEmployee] = useState({ name: '', department_id: '' });
+  const [openEmployeeModal, setOpenEmployeeModal] = useState(false);
+  const [employeeDeptSearch, setEmployeeDeptSearch] = useState('');
 
-  // === Общие состояния ===
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-  const [loading, setLoading] = useState(false);
+  // === Состояния для модальных окон подтверждения удаления ===
+  const [deleteDialog, setDeleteDialog] = useState({
+    open: false,
+    title: '',
+    content: '',
+    onConfirm: null,
+  });
 
-  // === Загрузка данных ===
+  // <<< ДОБАВИЛ: Мемоизация отфильтрованных отделов для выпадающего списка сотрудников
+  const filteredDepartments = useMemo(() => {
+    const term = employeeDeptSearch.toLowerCase();
+    return departments
+      .filter(dept => dept.name.toLowerCase().includes(term))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  }, [departments, employeeDeptSearch]); // Зависимости: departments и employeeDeptSearch
+
+  // === Состояния для Snackbar (уведомлений) ===
+  // Предполагается, что Snackbar управляется из App.js или родительского компонента
+  // const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  // === НОВЫЕ СОСТОЯНИЯ ДЛЯ УПРАВЛЕНИЯ СПИСКАМИ И ПОИСКОМ ===
+  // Управление открытием/закрытием списков
+  const [expandedLists, setExpandedLists] = useState({
+    types: false,
+    statuses: false,
+    departments: false,
+    employees: false,
+  });
+
+  // Поисковые запросы для каждого списка
+  const [searchTerms, setSearchTerms] = useState({
+    types: '',
+    statuses: '',
+    departments: '',
+    employees: '',
+  });
+
+  // <<< ДОБАВИЛ: Поисковый запрос для фильтрации отделов в выпадающем списке сотрудников
+
+  // === Загрузка данных при монтировании компонента ===
   useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // ИСПРАВЛЕНО: Путь к свойствам, предполагая /api/properties
+        const [typesRes, statusesRes, departmentsRes, employeesRes, propertiesRes] = await Promise.all([
+          axios.get(`${API_BASE_URL}/api/types`, { withCredentials: true }),
+          axios.get(`${API_BASE_URL}/api/statuses`, { withCredentials: true }),
+          axios.get(`${API_BASE_URL}/api/departments`, { withCredentials: true }),
+          axios.get(`${API_BASE_URL}/api/employees`, { withCredentials: true }),
+          axios.get(`${API_BASE_URL}/api/properties`, { withCredentials: true }), // <<< ИСПРАВЛЕНО
+        ]);
+        
+        setTypes(typesRes.data);
+        setStatuses(statusesRes.data);
+        setDepartments(departmentsRes.data);
+        setEmployees(employeesRes.data);
+        setAllProperties(propertiesRes.data);
+      } catch (error) {
+        console.error('Ошибка при загрузке данных:', error);
+        // setSnackbar({ open: true, message: 'Ошибка при загрузке данных', severity: 'error' });
+      }
+    };
     fetchData();
-    fetchProperties(); // Загружаем все свойства один раз
   }, []);
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      // ВАЖНО: Все GET-запросы также должны использовать withCredentials,
-      // если API требует аутентификации для чтения
-      const [typesRes, statusesRes, departmentsRes, employeesRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/types`, { withCredentials: true }),
-        axios.get(`${API_BASE_URL}/api/statuses`, { withCredentials: true }),
-        axios.get(`${API_BASE_URL}/api/departments`, { withCredentials: true }),
-        axios.get(`${API_BASE_URL}/api/employees`, { withCredentials: true }),
-      ]);
-      setTypes(typesRes.data);
-      setStatuses(statusesRes.data);
-      setDepartments(departmentsRes.data);
-      setEmployees(employeesRes.data);
-    } catch (err) {
-      console.error('Ошибка при загрузке данных:', err);
-      // Проверим, связана ли ошибка с аутентификацией
-      if (err.response && err.response.status === 401) {
-         showSnackbar('Ошибка аутентификации. Пожалуйста, войдите снова.', 'error');
-         // Здесь можно вызвать функцию выхода или перенаправить на логин
-         // Например: logout(); // если такая функция есть
-      } else {
-         showSnackbar('Ошибка при загрузке данных', 'error');
-      }
-    } finally {
-      setLoading(false);
-    }
+
+  // === Функции для управления списками и поиском ===
+
+  const toggleList = (listName) => {
+    setExpandedLists(prev => ({
+      ...prev,
+      [listName]: !prev[listName]
+    }));
   };
 
-  // Загрузка всех свойств для выбора
-  const fetchProperties = async () => {
-    try {
-      const res = await axios.get(`${API_BASE_URL}/api/properties`, { withCredentials: true });
-      setAllProperties(res.data);
-    } catch (err) {
-      console.error('Ошибка при загрузке свойств:', err);
-      showSnackbar('Ошибка при загрузке списка свойств', 'error');
-    }
+  const handleSearchChange = (listName, value) => {
+    setSearchTerms(prev => ({
+      ...prev,
+      [listName]: value
+    }));
   };
 
-  // === Уведомления ===
-  const showSnackbar = (message, severity = 'success') => {
-    setSnackbar({ open: true, message, severity });
+  // Функция для получения отфильтрованных и отсортированных элементов
+  const getFilteredAndSortedItems = (items, searchTerm, itemNameField = 'name') => {
+    const term = searchTerm.toLowerCase();
+    let filtered = items.filter(item =>
+      item[itemNameField] && item[itemNameField].toLowerCase().includes(term)
+    );
+    // Сортируем отфильтрованные результаты по алфавиту
+    filtered.sort((a, b) => a[itemNameField].localeCompare(b[itemNameField], 'ru'));
+    return filtered;
   };
 
-  const handleCloseSnackbar = () => {
-    setSnackbar({ ...snackbar, open: false });
+  // === Вспомогательные функции ===
+  const getDepartmentName = (deptId) => {
+    const dept = departments.find(d => d.id === deptId);
+    return dept ? dept.name : 'Неизвестный отдел';
   };
 
-  // === Логика для Типов устройств ===
+  const handleOpenDeleteDialog = (title, content, onConfirm) => {
+    setDeleteDialog({ open: true, title, content, onConfirm });
+  };
+
+  const handleCloseDeleteDialog = () => {
+    setDeleteDialog({ open: false, title: '', content: '', onConfirm: null });
+  };
+
+  const handleConfirmDelete = () => {
+    if (deleteDialog.onConfirm) deleteDialog.onConfirm();
+    handleCloseDeleteDialog();
+  };
+
+  // const handleCloseSnackbar = () => {
+  //   setSnackbar({ ...snackbar, open: false });
+  // };
+
+  // === CRUD функции для Типов ===
   const handleAddType = async () => {
-    if (!newType.trim()) {
-      showSnackbar('Название типа не может быть пустым', 'warning');
-      return;
-    }
+    if (!newType.trim()) return;
     try {
-      // ВАЖНО: Добавлен withCredentials: true
       const res = await axios.post(`${API_BASE_URL}/api/types`, { name: newType }, { withCredentials: true });
       setTypes([...types, res.data]);
       setNewType('');
-      showSnackbar('Тип устройства добавлен');
-    } catch (err) {
-      console.error('Ошибка при добавлении типа:', err);
-      // Проверим, связана ли ошибка с аутентификацией
-      if (err.response && err.response.status === 401) {
-         showSnackbar('Ошибка аутентификации. Пожалуйста, войдите снова.', 'error');
-      } else {
-         showSnackbar('Ошибка при добавлении типа', 'error');
-      }
+      // <<< ДОБАВИЛ: Очистка поиска после добавления
+      handleSearchChange('types', '');
+      // setSnackbar({ open: true, message: 'Тип устройства добавлен', severity: 'success' });
+    } catch (error) {
+      console.error('Ошибка при добавлении типа:', error);
+      // setSnackbar({ open: true, message: 'Ошибка при добавлении типа', severity: 'error' });
+    }
+  };
+
+  const handleOpenEditType = async (type) => {
+    setEditingTypeId(type.id);
+    setEditingTypeName(type.name);
+
+    try {
+      const propertiesRes = await axios.get(`${API_BASE_URL}/api/types/${type.id}/properties`, { withCredentials: true });
+      const associatedProps = propertiesRes.data;
+      const associatedPropIds = associatedProps.map(p => p.id);
+
+      setTypeProperties(associatedPropIds);
+      setAvailableProperties(allProperties.filter(prop => !associatedPropIds.includes(prop.id)));
+      setOpenTypeModal(true);
+    } catch (error) {
+      console.error('Ошибка при загрузке свойств типа для редактирования:', error);
+      setTypeProperties([]);
+      setAvailableProperties(allProperties);
+      setOpenTypeModal(true);
     }
   };
 
   const handleUpdateType = async () => {
-    if (!editingTypeName.trim()) {
-      showSnackbar('Название типа не может быть пустым', 'warning');
-      return;
-    }
+    if (!editingTypeName.trim()) return;
     try {
-      // ВАЖНО: Добавлен withCredentials: true
       await axios.put(`${API_BASE_URL}/api/types/${editingTypeId}`, { name: editingTypeName }, { withCredentials: true });
-      setTypes(types.map(t => (t.id === editingTypeId ? { ...t, name: editingTypeName } : t)));
+      await axios.put(`${API_BASE_URL}/api/types/${editingTypeId}/properties`, { property_ids: typeProperties }, { withCredentials: true });
+
+      setTypes(types.map(t => t.id === editingTypeId ? { ...t, name: editingTypeName } : t));
+      setOpenTypeModal(false);
       setEditingTypeId(null);
       setEditingTypeName('');
-      showSnackbar('Тип устройства обновлён');
-    } catch (err) {
-      console.error('Ошибка при обновлении типа:', err);
-      // Проверим, связана ли ошибка с аутентификацией
-      if (err.response && err.response.status === 401) {
-         showSnackbar('Ошибка аутентификации. Пожалуйста, войдите снова.', 'error');
-      } else {
-         showSnackbar('Ошибка при обновлении типа', 'error');
-      }
+      setTypeProperties([]);
+      setAvailableProperties([]);
+    } catch (error) {
+      console.error('Ошибка при обновлении типа:', error);
     }
   };
 
   const handleDeleteType = async (id) => {
-    // Простая защита от случайного удаления, можно улучшить с подтверждением
-    if (!window.confirm('Вы уверены, что хотите удалить этот тип?')) return;
     try {
-      // ВАЖНО: Добавлен withCredentials: true
       await axios.delete(`${API_BASE_URL}/api/types/${id}`, { withCredentials: true });
       setTypes(types.filter(t => t.id !== id));
-      showSnackbar('Тип устройства удалён');
-    } catch (err) {
-      console.error('Ошибка при удалении типа:', err);
-      // Проверим, связана ли ошибка с аутентификацией
-      if (err.response && err.response.status === 401) {
-         showSnackbar('Ошибка аутентификации. Пожалуйста, войдите снова.', 'error');
-      } else {
-         showSnackbar('Ошибка при удалении типа. Возможно, он используется.', 'error');
-      }
+    } catch (error) {
+      console.error('Ошибка при удалении типа:', error);
     }
   };
 
-  // === Логика для Свойств Типа (Модальное окно) ===
-  const handleOpenPropertiesModal = async (typeId) => {
-    try {
-      // 1. Получить текущие свойства типа
-      // ВАЖНО: Добавлен withCredentials: true
-      const propertiesRes = await axios.get(`${API_BASE_URL}/api/types/${typeId}/properties`, { withCredentials: true });
-      const currentPropertyIds = propertiesRes.data.map(p => p.id);
-      
-      setEditingTypeId(typeId); // Сохраняем ID типа, с которым работаем
-      setSelectedPropertyIds(currentPropertyIds);
-      setEditingTypeProperties(propertiesRes.data); // Для отображения в модалке
-      setOpenTypeModal(true);
-    } catch (err) {
-      console.error('Ошибка при загрузке свойств типа:', err);
-      // Проверим, связана ли ошибка с аутентификацией
-      if (err.response && err.response.status === 401) {
-         showSnackbar('Ошибка аутентификации. Пожалуйста, войдите снова.', 'error');
-      } else {
-         showSnackbar('Ошибка при загрузке свойств типа', 'error');
-      }
-    }
-  };
-
-  const handleClosePropertiesModal = () => {
-    setOpenTypeModal(false);
-    setEditingTypeId(null);
-    setSelectedPropertyIds([]);
-    setEditingTypeProperties([]);
-  };
-
-  // Сохранение выбранных свойств для типа
-  const handleSaveTypeProperties = async () => {
-    if (!editingTypeId) return;
-    try {
-      // ВАЖНО: Добавлен withCredentials: true
-      await axios.put(
-        `${API_BASE_URL}/api/types/${editingTypeId}/properties`, 
-        { property_ids: selectedPropertyIds }, 
-        { withCredentials: true }
-      );
-      showSnackbar('Свойства типа обновлены');
-      handleClosePropertiesModal();
-      // Опционально: перезагрузить список типов или обновить конкретный тип в состоянии
-    } catch (err) {
-      console.error('Ошибка при сохранении свойств типа:', err);
-      // Проверим, связана ли ошибка с аутентификацией
-      if (err.response && err.response.status === 401) {
-         showSnackbar('Ошибка аутентификации. Пожалуйста, войдите снова.', 'error');
-      } else {
-         showSnackbar('Ошибка при сохранении свойств типа', 'error');
-      }
-    }
-  };
-
-  // Обработка выбора/отмены выбора свойства в модальном окне
-  const handlePropertyToggle = (propertyId) => {
-    setSelectedPropertyIds(prev => 
-      prev.includes(propertyId) 
-        ? prev.filter(id => id !== propertyId) 
-        : [...prev, propertyId]
-    );
-  };
-
-  // === Логика для Статусов ===
+  // === CRUD функции для Статусов ===
   const handleAddStatus = async () => {
-    if (!newStatus.trim()) {
-      showSnackbar('Название статуса не может быть пустым', 'warning');
-      return;
-    }
+    if (!newStatus.trim()) return;
     try {
-      // ВАЖНО: Добавлен withCredentials: true
       const res = await axios.post(`${API_BASE_URL}/api/statuses`, { name: newStatus }, { withCredentials: true });
       setStatuses([...statuses, res.data]);
       setNewStatus('');
-      showSnackbar('Статус добавлен');
-    } catch (err) {
-      console.error('Ошибка при добавлении статуса:', err);
-      // Проверим, связана ли ошибка с аутентификацией
-      if (err.response && err.response.status === 401) {
-         showSnackbar('Ошибка аутентификации. Пожалуйста, войдите снова.', 'error');
-      } else {
-         showSnackbar('Ошибка при добавлении статуса', 'error');
-      }
+      // <<< ДОБАВИЛ: Очистка поиска после добавления
+      handleSearchChange('statuses', '');
+      // setSnackbar({ open: true, message: 'Статус добавлен', severity: 'success' });
+    } catch (error) {
+      console.error('Ошибка при добавлении статуса:', error);
+      // setSnackbar({ open: true, message: 'Ошибка при добавлении статуса', severity: 'error' });
     }
   };
 
+  const handleOpenEditStatus = (status) => {
+    setEditingStatusId(status.id);
+    setEditingStatusName(status.name);
+    setOpenStatusModal(true);
+  };
+
   const handleUpdateStatus = async () => {
-    if (!editingStatusName.trim()) {
-      showSnackbar('Название статуса не может быть пустым', 'warning');
-      return;
-    }
+    if (!editingStatusName.trim()) return;
     try {
-      // ВАЖНО: Добавлен withCredentials: true
       await axios.put(`${API_BASE_URL}/api/statuses/${editingStatusId}`, { name: editingStatusName }, { withCredentials: true });
-      setStatuses(statuses.map(s => (s.id === editingStatusId ? { ...s, name: editingStatusName } : s)));
+      setStatuses(statuses.map(s => s.id === editingStatusId ? { ...s, name: editingStatusName } : s));
+      setOpenStatusModal(false);
       setEditingStatusId(null);
       setEditingStatusName('');
-      showSnackbar('Статус обновлён');
-    } catch (err) {
-      console.error('Ошибка при обновлении статуса:', err);
-      // Проверим, связана ли ошибка с аутентификацией
-      if (err.response && err.response.status === 401) {
-         showSnackbar('Ошибка аутентификации. Пожалуйста, войдите снова.', 'error');
-      } else {
-         showSnackbar('Ошибка при обновлении статуса', 'error');
-      }
+    } catch (error) {
+      console.error('Ошибка при обновлении статуса:', error);
     }
   };
 
   const handleDeleteStatus = async (id) => {
-    if (!window.confirm('Вы уверены, что хотите удалить этот статус?')) return;
     try {
-      // ВАЖНО: Добавлен withCredentials: true
       await axios.delete(`${API_BASE_URL}/api/statuses/${id}`, { withCredentials: true });
       setStatuses(statuses.filter(s => s.id !== id));
-      showSnackbar('Статус удалён');
-    } catch (err) {
-      console.error('Ошибка при удалении статуса:', err);
-      // Проверим, связана ли ошибка с аутентификацией
-      if (err.response && err.response.status === 401) {
-         showSnackbar('Ошибка аутентификации. Пожалуйста, войдите снова.', 'error');
-      } else {
-         showSnackbar('Ошибка при удалении статуса. Возможно, он используется.', 'error');
-      }
+    } catch (error) {
+      console.error('Ошибка при удалении статуса:', error);
     }
   };
 
-  // === Логика для Отделов ===
+  // === CRUD функции для Отделов ===
   const handleAddDepartment = async () => {
-    if (!newDepartment.trim()) {
-      showSnackbar('Название отдела не может быть пустым', 'warning');
-      return;
-    }
+    if (!newDepartment.trim()) return;
     try {
-      // ВАЖНО: Добавлен withCredentials: true
       const res = await axios.post(`${API_BASE_URL}/api/departments`, { name: newDepartment }, { withCredentials: true });
       setDepartments([...departments, res.data]);
       setNewDepartment('');
-      showSnackbar('Отдел добавлен');
-    } catch (err) {
-      console.error('Ошибка при добавлении отдела:', err);
-      // Проверим, связана ли ошибка с аутентификацией
-      if (err.response && err.response.status === 401) {
-         showSnackbar('Ошибка аутентификации. Пожалуйста, войдите снова.', 'error');
-      } else {
-         showSnackbar('Ошибка при добавлении отдела', 'error');
-      }
+      // <<< ДОБАВИЛ: Очистка поиска после добавления
+      handleSearchChange('departments', '');
+      // setSnackbar({ open: true, message: 'Отдел добавлен', severity: 'success' });
+    } catch (error) {
+      console.error('Ошибка при добавлении отдела:', error);
+      // setSnackbar({ open: true, message: 'Ошибка при добавлении отдела', severity: 'error' });
     }
   };
 
+  const handleOpenEditDepartment = (department) => {
+    setEditingDepartmentId(department.id);
+    setEditingDepartmentName(department.name);
+    setOpenDepartmentModal(true);
+  };
+
   const handleUpdateDepartment = async () => {
-    if (!editingDepartmentName.trim()) {
-      showSnackbar('Название отдела не может быть пустым', 'warning');
-      return;
-    }
+    if (!editingDepartmentName.trim()) return;
     try {
-      // ВАЖНО: Добавлен withCredentials: true
       await axios.put(`${API_BASE_URL}/api/departments/${editingDepartmentId}`, { name: editingDepartmentName }, { withCredentials: true });
-      setDepartments(departments.map(d => (d.id === editingDepartmentId ? { ...d, name: editingDepartmentName } : d)));
+      setDepartments(departments.map(d => d.id === editingDepartmentId ? { ...d, name: editingDepartmentName } : d));
+      setOpenDepartmentModal(false);
       setEditingDepartmentId(null);
       setEditingDepartmentName('');
-      showSnackbar('Отдел обновлён');
-    } catch (err) {
-      console.error('Ошибка при обновлении отдела:', err);
-      // Проверим, связана ли ошибка с аутентификацией
-      if (err.response && err.response.status === 401) {
-         showSnackbar('Ошибка аутентификации. Пожалуйста, войдите снова.', 'error');
-      } else {
-         showSnackbar('Ошибка при обновлении отдела', 'error');
-      }
+    } catch (error) {
+      console.error('Ошибка при обновлении отдела:', error);
     }
   };
 
   const handleDeleteDepartment = async (id) => {
-    if (!window.confirm('Вы уверены, что хотите удалить этот отдел?')) return;
     try {
-      // ВАЖНО: Добавлен withCredentials: true
       await axios.delete(`${API_BASE_URL}/api/departments/${id}`, { withCredentials: true });
       setDepartments(departments.filter(d => d.id !== id));
-      showSnackbar('Отдел удалён');
-    } catch (err) {
-      console.error('Ошибка при удалении отдела:', err);
-      // Проверим, связана ли ошибка с аутентификацией
-      if (err.response && err.response.status === 401) {
-         showSnackbar('Ошибка аутентификации. Пожалуйста, войдите снова.', 'error');
-      } else {
-         showSnackbar('Ошибка при удалении отдела. Возможно, он используется.', 'error');
-      }
+    } catch (error) {
+      console.error('Ошибка при удалении отдела:', error);
     }
   };
 
-  // === Логика для Сотрудников ===
+  // === CRUD функции для Сотрудников ===
+  // <<< ИЗМЕНЕНО: handleAddEmployee теперь использует объект newEmployee
   const handleAddEmployee = async () => {
     if (!newEmployee.name.trim() || !newEmployee.department_id) {
-      showSnackbar('Имя и отдел обязательны', 'warning');
       return;
     }
     try {
-      // ВАЖНО: Добавлен withCredentials: true
       const res = await axios.post(`${API_BASE_URL}/api/employees`, newEmployee, { withCredentials: true });
-      // Получаем полную информацию о сотруднике с отделом для отображения
       setEmployees([...employees, res.data]);
+      // Очищаем форму добавления
       setNewEmployee({ name: '', department_id: '' });
-      showSnackbar('Сотрудник добавлен');
-    } catch (err) {
-      console.error('Ошибка при добавлении сотрудника:', err);
-      // Проверим, связана ли ошибка с аутентификацией
-      if (err.response && err.response.status === 401) {
-         showSnackbar('Ошибка аутентификации. Пожалуйста, войдите снова.', 'error');
-      } else {
-         showSnackbar('Ошибка при добавлении сотрудника', 'error');
-      }
+      // <<< ДОБАВИЛ: Очистка поиска после добавления
+      handleSearchChange('employees', '');
+      // <<< ДОБАВИЛ: Очистка поиска по отделам в выпадающем списке
+      setEmployeeDeptSearch('');
+      // setSnackbar({ open: true, message: 'Сотрудник добавлен', severity: 'success' });
+    } catch (error) {
+      console.error('Ошибка при добавлении сотрудника:', error);
+      // setSnackbar({ open: true, message: 'Ошибка при добавлении сотрудника', severity: 'error' });
     }
+  };
+
+  const handleOpenEditEmployee = (employee) => {
+    setEditingEmployeeId(employee.id);
+    setEditingEmployee({ name: employee.name, department_id: employee.department_id });
+    setOpenEmployeeModal(true);
   };
 
   const handleUpdateEmployee = async () => {
     if (!editingEmployee.name.trim() || !editingEmployee.department_id) {
-      showSnackbar('Имя и отдел обязательны', 'warning');
       return;
     }
     try {
-      // ВАЖНО: Добавлен withCredentials: true
       await axios.put(`${API_BASE_URL}/api/employees/${editingEmployeeId}`, editingEmployee, { withCredentials: true });
-      setEmployees(employees.map(e => (e.id === editingEmployeeId ? { ...e, ...editingEmployee } : e)));
+      setEmployees(employees.map(e => e.id === editingEmployeeId ? { ...e, ...editingEmployee } : e));
+      setOpenEmployeeModal(false);
       setEditingEmployeeId(null);
       setEditingEmployee({ name: '', department_id: '' });
-      showSnackbar('Сотрудник обновлён');
-    } catch (err) {
-      console.error('Ошибка при обновлении сотрудника:', err);
-      // Проверим, связана ли ошибка с аутентификацией
-      if (err.response && err.response.status === 401) {
-         showSnackbar('Ошибка аутентификации. Пожалуйста, войдите снова.', 'error');
-      } else {
-         showSnackbar('Ошибка при обновлении сотрудника', 'error');
-      }
+    } catch (error) {
+      console.error('Ошибка при обновлении сотрудника:', error);
     }
   };
 
   const handleDeleteEmployee = async (id) => {
-    if (!window.confirm('Вы уверены, что хотите удалить этого сотрудника?')) return;
     try {
-      // ВАЖНО: Добавлен withCredentials: true
       await axios.delete(`${API_BASE_URL}/api/employees/${id}`, { withCredentials: true });
       setEmployees(employees.filter(e => e.id !== id));
-      showSnackbar('Сотрудник удалён');
-    } catch (err) {
-      console.error('Ошибка при удалении сотрудника:', err);
-      // Проверим, связана ли ошибка с аутентификацией
-      if (err.response && err.response.status === 401) {
-         showSnackbar('Ошибка аутентификации. Пожалуйста, войдите снова.', 'error');
-      } else {
-         showSnackbar('Ошибка при удалении сотрудника. Возможно, он используется.', 'error');
-      }
+    } catch (error) {
+      console.error('Ошибка при удалении сотрудника:', error);
     }
   };
 
-  // === Рендер ===
-  if (!currentUser || currentUser.role !== 'admin') {
+  // === Функция для рендеринга одного списка ===
+  const renderListSection = ({
+    listName,
+    title,
+    items,
+    itemNameField,
+    newItemValue,
+    setNewItemValue,
+    handleAdd,
+    handleEdit,
+    handleDelete,
+    placeholder,
+    showDepartment = false,
+    showDepartmentSelect = false,
+    filteredDepartments = [] // Значение по умолчанию для других списков
+  }) => {
+    const searchTerm = searchTerms[listName];
+    const isExpanded = expandedLists[listName];
+
+    // Сортируем исходный список по алфавиту
+    const sortedItems = [...items].sort((a, b) => a[itemNameField].localeCompare(b[itemNameField], 'ru'));
+
+    // Фильтруем и сортируем результаты поиска
+    const filteredItems = getFilteredAndSortedItems(items, searchTerm, itemNameField);
+
     return (
-      <Container maxWidth="md" style={{ marginTop: '20px' }}>
-        <Typography variant="h6" color="error">
-          Доступ запрещён. Только для администраторов.
+      <Paper elevation={2} sx={{ p: 2, mb: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          {title}
         </Typography>
-      </Container>
-    );
-  }
 
-  return (
-    <Container maxWidth="xl" style={{ marginTop: '20px' }}>
-      <Typography variant="h4" gutterBottom>
-        Справочник
-      </Typography>
+        {/* <<< ИЗМЕНЕНО: Единый контейнер для всех элементов управления вводом */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, flexWrap: 'wrap' }}>
+          
+          {/* Поле ввода */}
+          <TextField
+            // Уменьшаем базовую ширину, чтобы уступить место другим элементам
+            sx={{ flexGrow: 1, minWidth: 120 }} 
+            variant="outlined"
+            size="small"
+            placeholder={placeholder}
+            value={typeof newItemValue === 'string' ? newItemValue : newItemValue.name || ''}
+            onChange={(e) => {
+              if (typeof newItemValue === 'string') {
+                setNewItemValue(e.target.value);
+              } else {
+                setNewItemValue(prev => ({ ...prev, name: e.target.value }));
+              }
+            }}
+            onInput={(e) => handleSearchChange(listName, e.target.value)}
+          />
 
-      {loading && <Typography>Загрузка...</Typography>}
-
-      <Grid container spacing={4}>
-        {/* === Типы устройств === */}
-        <Grid item xs={12} md={6}>
-          <Paper elevation={3} style={{ padding: '20px' }}>
-            <Typography variant="h6" gutterBottom>
-              Типы устройств
-            </Typography>
-            <Box display="flex" mb={2}>
-              <TextField
-                label="Новый тип"
-                value={newType}
-                onChange={(e) => setNewType(e.target.value)}
-                fullWidth
-                size="small"
-              />
-              <Button variant="contained" onClick={handleAddType} color="success" style={{ marginLeft: '10px' }}>
-                Добавить
-              </Button>
-            </Box>
-            <TableContainer>
-              <Table size="small">
-                <TableBody>
-                  {types.map((type) => (
-                    // <<<--- ИЗМЕНЕНИЯ ДЛЯ НАВЕДЕНИЯ НА СТРОКУ
-                    <TableRow
-                      key={type.id}
-                      onMouseEnter={(e) => {
-                        const buttons = e.currentTarget.querySelector('.edit-delete-buttons');
-                        if (buttons) {
-                          buttons.style.visibility = 'visible';
-                          buttons.style.opacity = '1';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        const buttons = e.currentTarget.querySelector('.edit-delete-buttons');
-                        if (buttons) {
-                          buttons.style.visibility = 'hidden';
-                          buttons.style.opacity = '0';
-                        }
-                      }}
-                    >
-                      <TableCell>{type.name}</TableCell>
-                      <TableCell align="right">
-                        {/* <<<--- ИЗМЕНЕНИЯ ДЛЯ ИКОНОК */}
-                        <Box
-                          className="edit-delete-buttons"
-                          sx={{
-                            display: 'flex',
-                            gap: 1,
-                            visibility: 'hidden',
-                            opacity: 0,
-                            transition: 'opacity 0.2s, visibility 0.2s',
-                            cursor: 'pointer',
-                            justifyContent: 'flex-end' // Выравнивание вправо
-                          }}
-                        >
-                          <Tooltip title="Редактировать">
-                            <IconButton
-                              color="primary"
-                              size="small"
-                              onClick={() => { setEditingTypeId(type.id); setEditingTypeName(type.name); }}
-                              aria-label="Редактировать"
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-
-                          <Tooltip title="Свойства">
-                            <IconButton
-                              color="primary"
-                              size="small"
-                              onClick={() => handleOpenPropertiesModal(type.id)}
-                              aria-label="Свойства"
-                            >
-                              <TuneIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-
-                          <Tooltip title="Удалить">
-                            <IconButton
-                              color="error"
-                              size="small"
-                              onClick={() => handleDeleteType(type.id)}
-                              aria-label="Удалить"
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-
-            {/* Модальное окно для редактирования названия типа */}
-            <Dialog open={editingTypeId && !openTypeModal} onClose={() => { setEditingTypeId(null); setEditingTypeName(''); }}>
-              <DialogTitle>Редактировать тип</DialogTitle>
-              <DialogContent>
-                <TextField
-                  autoFocus
-                  margin="dense"
-                  label="Название типа"
-                  fullWidth
-                  value={editingTypeName}
-                  onChange={(e) => setEditingTypeName(e.target.value)}
-                />
-              </DialogContent>
-              <DialogActions>
-                <Button onClick={() => { setEditingTypeId(null); setEditingTypeName(''); }}>Отмена</Button>
-                <Button onClick={handleUpdateType} color="primary">
-                  Сохранить
-                </Button>
-              </DialogActions>
-            </Dialog>
-
-            {/* Модальное окно для управления свойствами типа */}
-            <Dialog open={openTypeModal} onClose={handleClosePropertiesModal} maxWidth="sm" fullWidth>
-              <DialogTitle>Управление свойствами для типа: {types.find(t => t.id === editingTypeId)?.name || '...'}</DialogTitle>
-              <DialogContent>
-                <FormControl fullWidth margin="normal">
-                  <InputLabel id="properties-select-label">Выберите свойства</InputLabel>
-                  <Select
-                    labelId="properties-select-label"
-                    multiple
-                    value={selectedPropertyIds}
-                    onChange={(e) => setSelectedPropertyIds(e.target.value)}
-                    input={<Input />}
-                    renderValue={(selected) => (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                        {selected.map((id) => {
-                          const property = allProperties.find(p => p.id === id);
-                          return property ? <Chip key={id} label={property.name} size="small" /> : null;
-                        })}
-                      </div>
-                    )}
-                    MenuProps={{
-                      PaperProps: {
-                        style: {
-                          maxHeight: 300,
-                        },
-                      },
-                    }}
-                  >
-                    {allProperties.map((property) => (
-                      <MenuItem key={property.id} value={property.id}>
-                        <Checkbox checked={selectedPropertyIds.includes(property.id)} />
-                        <ListItemText primary={property.name} />
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-
-                {editingTypeProperties.length > 0 && (
-                  <>
-                    <Typography variant="subtitle1" gutterBottom style={{ marginTop: '16px' }}>
-                      Текущие свойства типа:
-                    </Typography>
-                    <ul>
-                      {editingTypeProperties.map((prop) => (
-                        <li key={prop.id}>{prop.name}</li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </DialogContent>
-              <DialogActions>
-                <Button onClick={handleClosePropertiesModal}>Отмена</Button>
-                <Button onClick={handleSaveTypeProperties} color="primary">
-                  Сохранить свойства
-                </Button>
-              </DialogActions>
-            </Dialog>
-          </Paper>
-        </Grid>
-
-        {/* === Статусы === */}
-        <Grid item xs={12} md={6}>
-          <Paper elevation={3} style={{ padding: '20px' }}>
-            <Typography variant="h6" gutterBottom>
-              Статусы
-            </Typography>
-            <Box display="flex" mb={2}>
-              <TextField
-                label="Новый статус"
-                value={newStatus}
-                onChange={(e) => setNewStatus(e.target.value)}
-                fullWidth
-                size="small"
-              />
-              <Button variant="contained" onClick={handleAddStatus} color="success" style={{ marginLeft: '10px' }}>
-                Добавить
-              </Button>
-            </Box>
-            <TableContainer>
-              <Table size="small">
-                <TableBody>
-                  {statuses.map((status) => (
-                    // <<<--- ИЗМЕНЕНИЯ ДЛЯ НАВЕДЕНИЯ НА СТРОКУ
-                    <TableRow
-                      key={status.id}
-                      onMouseEnter={(e) => {
-                        const buttons = e.currentTarget.querySelector('.edit-delete-buttons');
-                        if (buttons) {
-                          buttons.style.visibility = 'visible';
-                          buttons.style.opacity = '1';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        const buttons = e.currentTarget.querySelector('.edit-delete-buttons');
-                        if (buttons) {
-                          buttons.style.visibility = 'hidden';
-                          buttons.style.opacity = '0';
-                        }
-                      }}
-                    >
-                      <TableCell>{status.name}</TableCell>
-                      <TableCell align="right">
-                        {/* <<<--- ИЗМЕНЕНИЯ ДЛЯ ИКОНОК */}
-                        <Box
-                          className="edit-delete-buttons"
-                          sx={{
-                            display: 'flex',
-                            gap: 1,
-                            visibility: 'hidden',
-                            opacity: 0,
-                            transition: 'opacity 0.2s, visibility 0.2s',
-                            cursor: 'pointer',
-                            justifyContent: 'flex-end'
-                          }}
-                        >
-                          <Tooltip title="Редактировать">
-                            <IconButton
-                              color="primary"
-                              size="small"
-                              onClick={() => { setEditingStatusId(status.id); setEditingStatusName(status.name); }}
-                              aria-label="Редактировать"
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-
-                          {/* У статусов, вероятно, нет свойств, поэтому кнопку TuneIcon можно убрать или оставить для будущего функционала */}
-                          {/* <Tooltip title="Свойства">
-                            <IconButton color="primary" size="small" aria-label="Свойства">
-                              <TuneIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip> */}
-
-                          <Tooltip title="Удалить">
-                            <IconButton
-                              color="error"
-                              size="small"
-                              onClick={() => handleDeleteStatus(status.id)}
-                              aria-label="Удалить"
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-
-            <Dialog open={!!editingStatusId} onClose={() => { setEditingStatusId(null); setEditingStatusName(''); }}>
-              <DialogTitle>Редактировать статус</DialogTitle>
-              <DialogContent>
-                <TextField
-                  autoFocus
-                  margin="dense"
-                  label="Название статуса"
-                  fullWidth
-                  value={editingStatusName}
-                  onChange={(e) => setEditingStatusName(e.target.value)}
-                />
-              </DialogContent>
-              <DialogActions>
-                <Button onClick={() => { setEditingStatusId(null); setEditingStatusName(''); }}>Отмена</Button>
-                <Button onClick={handleUpdateStatus} color="primary">
-                  Сохранить
-                </Button>
-              </DialogActions>
-            </Dialog>
-          </Paper>
-        </Grid>
-
-        {/* === Отделы (подразделения) === */}
-        <Grid item xs={12} md={6}>
-          <Paper elevation={3} style={{ padding: '20px' }}>
-            <Typography variant="h6" gutterBottom>
-              Отделы (подразделения)
-            </Typography>
-            <Box display="flex" mb={2}>
-              <TextField
-                label="Новый отдел"
-                value={newDepartment}
-                onChange={(e) => setNewDepartment(e.target.value)}
-                fullWidth
-                size="small"
-              />
-              <Button variant="contained" onClick={handleAddDepartment} color="success" style={{ marginLeft: '10px' }}>
-                Добавить
-              </Button>
-            </Box>
-            <TableContainer>
-              <Table size="small">
-                <TableBody>
-                  {departments.map((department) => (
-                    // <<<--- ИЗМЕНЕНИЯ ДЛЯ НАВЕДЕНИЯ НА СТРОКУ
-                    <TableRow
-                      key={department.id}
-                      onMouseEnter={(e) => {
-                        const buttons = e.currentTarget.querySelector('.edit-delete-buttons');
-                        if (buttons) {
-                          buttons.style.visibility = 'visible';
-                          buttons.style.opacity = '1';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        const buttons = e.currentTarget.querySelector('.edit-delete-buttons');
-                        if (buttons) {
-                          buttons.style.visibility = 'hidden';
-                          buttons.style.opacity = '0';
-                        }
-                      }}
-                    >
-                      <TableCell>{department.name}</TableCell>
-                      <TableCell align="right">
-                        {/* <<<--- ИЗМЕНЕНИЯ ДЛЯ ИКОНОК */}
-                        <Box
-                          className="edit-delete-buttons"
-                          sx={{
-                            display: 'flex',
-                            gap: 1,
-                            visibility: 'hidden',
-                            opacity: 0,
-                            transition: 'opacity 0.2s, visibility 0.2s',
-                            cursor: 'pointer',
-                            justifyContent: 'flex-end'
-                          }}
-                        >
-                          <Tooltip title="Редактировать">
-                            <IconButton
-                              color="primary"
-                              size="small"
-                              onClick={() => { setEditingDepartmentId(department.id); setEditingDepartmentName(department.name); }}
-                              aria-label="Редактировать"
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-
-                          {/* У отделов, вероятно, нет свойств */}
-                          {/* <Tooltip title="Свойства">
-                            <IconButton color="primary" size="small" aria-label="Свойства">
-                              <TuneIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip> */}
-
-                          <Tooltip title="Удалить">
-                            <IconButton
-                              color="error"
-                              size="small"
-                              onClick={() => handleDeleteDepartment(department.id)}
-                              aria-label="Удалить"
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-
-            <Dialog open={!!editingDepartmentId} onClose={() => { setEditingDepartmentId(null); setEditingDepartmentName(''); }}>
-              <DialogTitle>Редактировать отдел</DialogTitle>
-              <DialogContent>
-                <TextField
-                  autoFocus
-                  margin="dense"
-                  label="Название отдела"
-                  fullWidth
-                  value={editingDepartmentName}
-                  onChange={(e) => setEditingDepartmentName(e.target.value)}
-                />
-              </DialogContent>
-              <DialogActions>
-                <Button onClick={() => { setEditingDepartmentId(null); setEditingDepartmentName(''); }}>Отмена</Button>
-                <Button onClick={handleUpdateDepartment} color="primary">
-                  Сохранить
-                </Button>
-              </DialogActions>
-            </Dialog>
-          </Paper>
-        </Grid>
-
-        {/* === Сотрудники === */}
-        <Grid item xs={12} md={6}>
-          <Paper elevation={3} style={{ padding: '20px' }}>
-            <Typography variant="h6" gutterBottom>
-              Сотрудники
-            </Typography>
-            <Box display="flex" flexWrap="wrap" mb={2} gap={1}>
-              <TextField
-                label="Имя сотрудника"
-                value={newEmployee.name}
-                onChange={(e) => setNewEmployee({ ...newEmployee, name: e.target.value })}
-                size="small"
-                style={{ flexGrow: 1, minWidth: '150px' }}
-              />
-              <FormControl size="small" style={{ minWidth: '150px' }}>
-                <InputLabel>Отдел</InputLabel>
-                <Select
-                  value={newEmployee.department_id}
-                  onChange={(e) => setNewEmployee({ ...newEmployee, department_id: e.target.value })}
-                  label="Отдел"
-                >
-                  {departments.map((dept) => (
+          {/* Выпадающий список для выбора отдела (только для сотрудников) */}
+          {showDepartmentSelect && (
+            <FormControl size="small" sx={{ minWidth: 120 }}>
+              {/* Стиль для полупрозрачного серого текста метки */}
+              <InputLabel
+                id={`select-dept-label-${listName}`}
+                sx={{
+                  '&.Mui-focused': {
+                    color: 'rgba(0, 0, 0, 0.6)',
+                  },
+                  '&': {
+                    color: 'rgba(0, 0, 0, 0.6)',
+                  }
+                }}
+              >
+                Отдел
+              </InputLabel>
+              <Select
+                labelId={`select-dept-label-${listName}`}
+                value={newEmployee.department_id}
+                label="Отдел"
+                onChange={(e) => setNewEmployee(prev => ({ ...prev, department_id: e.target.value }))}
+                MenuProps={{
+                  anchorOrigin: {
+                    vertical: 'bottom',
+                    horizontal: 'left',
+                  },
+                  transformOrigin: {
+                    vertical: 'top',
+                    horizontal: 'left',
+                  },
+                  PaperProps: {
+                    style: {
+                      maxHeight: 260,
+                    },
+                  },
+                }}
+                renderValue={(selected) => {
+                  const selectedDept = departments.find(d => d.id === selected);
+                  return selectedDept ? selectedDept.name : '';
+                }}
+              >
+                {filteredDepartments.length > 0 ? (
+                  filteredDepartments.map((dept) => (
                     <MenuItem key={dept.id} value={dept.id}>
                       {dept.name}
                     </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <Button variant="contained" color="success" onClick={handleAddEmployee}>
-                Добавить
-              </Button>
-            </Box>
-            <TableContainer>
-              <Table size="small">
-                <TableBody>
-                  {employees.map((employee) => (
-                    // <<<--- ИЗМЕНЕНИЯ ДЛЯ НАВЕДЕНИЯ НА СТРОКУ
-                    <TableRow
-                      key={employee.id}
-                      onMouseEnter={(e) => {
-                        const buttons = e.currentTarget.querySelector('.edit-delete-buttons');
-                        if (buttons) {
-                          buttons.style.visibility = 'visible';
-                          buttons.style.opacity = '1';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        const buttons = e.currentTarget.querySelector('.edit-delete-buttons');
-                        if (buttons) {
-                          buttons.style.visibility = 'hidden';
-                          buttons.style.opacity = '0';
-                        }
-                      }}
-                    >
-                      <TableCell>{employee.name}</TableCell>
-                      <TableCell>
-                        {departments.find(d => d.id === employee.department_id)?.name || 'Не указан'}
-                      </TableCell>
-                      <TableCell align="right">
-                        {/* <<<--- ИЗМЕНЕНИЯ ДЛЯ ИКОНОК */}
-                        <Box
-                          className="edit-delete-buttons"
-                          sx={{
-                            display: 'flex',
-                            gap: 1,
-                            visibility: 'hidden',
-                            opacity: 0,
-                            transition: 'opacity 0.2s, visibility 0.2s',
-                            cursor: 'pointer',
-                            justifyContent: 'flex-end'
-                          }}
-                        >
-                          <Tooltip title="Редактировать">
-                            <IconButton
-                              color="primary"
-                              size="small"
-                              onClick={() => {
-                                setEditingEmployeeId(employee.id);
-                                setEditingEmployee({
-                                  name: employee.name,
-                                  department_id: employee.department_id,
-                                });
-                              }}
-                              aria-label="Редактировать"
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                  ))
+                ) : (
+                  <MenuItem disabled>
+                    <em>Отделы не найдены</em>
+                  </MenuItem>
+                )}
+              </Select>
+            </FormControl>
+          )}
 
-                          <Tooltip title="Удалить">
-                            <IconButton
-                              color="error"
-                              size="small"
-                              onClick={() => handleDeleteEmployee(employee.id)}
-                              aria-label="Удалить"
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+          {/* Кнопка раскрытия/скрытия списка */}
+          <IconButton
+            color="primary"
+            onClick={() => toggleList(listName)}
+            // Добавляем минимальную ширину для согласованности
+            sx={{ flexShrink: 0 }} 
+          >
+            {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+          </IconButton>
 
-            <Dialog open={!!editingEmployeeId} onClose={() => { setEditingEmployeeId(null); setEditingEmployee({ name: '', department_id: '' }); }}>
-              <DialogTitle>Редактировать сотрудника</DialogTitle>
-              <DialogContent>
-                <TextField
-                  autoFocus
-                  margin="dense"
-                  label="Имя сотрудника"
-                  fullWidth
-                  value={editingEmployee.name}
-                  onChange={(e) => setEditingEmployee({ ...editingEmployee, name: e.target.value })}
+          {/* Кнопка добавления */}
+          <Button
+            variant="contained"
+            size="small"
+            onClick={handleAdd}
+            color="success"
+            // Добавляем минимальную ширину для согласованности
+            sx={{ flexShrink: 0 }} 
+            disabled={
+              typeof newItemValue === 'string'
+                ? !newItemValue.trim()
+                : (!newItemValue.name?.trim() || !newItemValue.department_id)
+            }
+          >
+            Добавить
+          </Button>
+        </Box>
+        {/* <<< /ИЗМЕНЕНО: Единый контейнер для всех элементов управления вводом */}
+
+        {/* Список результатов поиска - отображается ТОЛЬКО если список ЗАКРЫТ */}
+        {!isExpanded && searchTerm && (
+          <List dense sx={{ maxHeight: 300, overflowY: 'auto', border: '1px solid #e0e0e0', borderRadius: 1, mt: 1 }}>
+            {filteredItems.slice(0, 3).map((item) => (
+              <ListItem key={item.id} sx={{ py: 0.5 }}>
+                <ListItemText
+                  primary={item[itemNameField]}
+                  secondary={showDepartment ? getDepartmentName(item.department_id) : null}
                 />
-                <FormControl fullWidth margin="dense">
-                  <InputLabel>Отдел</InputLabel>
-                  <Select
-                    value={editingEmployee.department_id}
-                    onChange={(e) => setEditingEmployee({ ...editingEmployee, department_id: e.target.value })}
-                    label="Отдел"
-                  >
-                    {departments.map((dept) => (
-                      <MenuItem key={dept.id} value={dept.id}>
-                        {dept.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </DialogContent>
-              <DialogActions>
-                <Button onClick={() => { setEditingEmployeeId(null); setEditingEmployee({ name: '', department_id: '' }); }}>Отмена</Button>
-                <Button onClick={handleUpdateEmployee} color="primary">
-                  Сохранить
-                </Button>
-              </DialogActions>
-            </Dialog>
-          </Paper>
-        </Grid>
-      </Grid>
+                {currentUser && currentUser.role === 'admin' && (
+                  <ListItemSecondaryAction>
+                    <IconButton color="primary" edge="end" aria-label="edit" onClick={() => handleEdit(item)}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton color="error" edge="end" aria-label="delete" onClick={() => {
+                      handleOpenDeleteDialog(
+                        `Удалить ${title.slice(0, -1)}?`,
+                        `Вы уверены, что хотите удалить "${item[itemNameField]}"? Это действие нельзя отменить.`,
+                        () => handleDelete(item.id)
+                      );
+                    }} sx={{ ml: 1 }}>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </ListItemSecondaryAction>
+                )}
+              </ListItem>
+            ))}
+            {filteredItems.length === 0 && (
+              <ListItem>
+                <ListItemText primary="Ничего не найдено" />
+              </ListItem>
+            )}
+            {filteredItems.length > 3 && (
+              <ListItem>
+                <ListItemText primary={`... и ещё ${filteredItems.length - 3}`} />
+              </ListItem>
+            )}
+          </List>
+        )}
 
-      {/* Уведомления */}
-      <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleCloseSnackbar}>
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
+        {/* Полный список (виден только если список развернут) */}
+        {isExpanded && (
+          <List dense sx={{ maxHeight: 300, overflowY: 'auto', border: '1px solid #e0e0e0', borderRadius: 1, mt: 1 }}>
+            {filteredItems.length > 0 ? (
+              filteredItems.map((item) => (
+                <ListItem key={item.id} sx={{ py: 0.5 }}>
+                  <ListItemText
+                    primary={item[itemNameField]}
+                    secondary={showDepartment ? getDepartmentName(item.department_id) : null}
+                  />
+                  {currentUser && currentUser.role === 'admin' && (
+                    <ListItemSecondaryAction>
+                      <IconButton color="primary" edge="end" aria-label="edit" onClick={() => handleEdit(item)}>
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton color="error" edge="end" aria-label="delete" onClick={() => {
+                        handleOpenDeleteDialog(
+                          `Удалить ${title.slice(0, -1)}?`,
+                          `Вы уверены, что хотите удалить "${item[itemNameField]}"? Это действие нельзя отменить.`,
+                          () => handleDelete(item.id)
+                        );
+                      }} sx={{ ml: 1 }}>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </ListItemSecondaryAction>
+                  )}
+                </ListItem>
+              ))
+            ) : (
+              <ListItem>
+                <ListItemText primary={`По запросу "${searchTerm}" ничего не найдено`} />
+              </ListItem>
+            )}
+          </List>
+        )}
+      </Paper>
+    );
+  };
+
+  return (
+    // <<< ИЗМЕНЕНО: Увеличил maxWidth с md на lg
+    <Container maxWidth="lg" sx={{ mt: 3, mb: 3 }}>
+      <Typography variant="h4" gutterBottom align="center">
+        Справочники
+      </Typography>
+
+
+
+      {/* Список Отделов */}
+      {renderListSection({
+        listName: 'departments',
+        title: 'Отделы (подразделения)',
+        items: departments,
+        itemNameField: 'name',
+        newItemValue: newDepartment,
+        setNewItemValue: setNewDepartment,
+        handleAdd: handleAddDepartment,
+        handleEdit: handleOpenEditDepartment,
+        handleDelete: handleDeleteDepartment,
+        placeholder: 'Введите отдел...'
+      })}
+
+      {/* Список Сотрудников */}
+      {renderListSection({
+        listName: 'employees',
+        title: 'Сотрудники (должность)',
+        items: employees,
+        itemNameField: 'name',
+        newItemValue: newEmployee,
+        setNewItemValue: setNewEmployee,
+        handleAdd: handleAddEmployee,
+        handleEdit: handleOpenEditEmployee,
+        handleDelete: handleDeleteEmployee,
+        placeholder: 'Введите ФИО сотрудника...',
+        showDepartment: true,
+        showDepartmentSelect: true,
+        filteredDepartments: filteredDepartments 
+      })}
+
+      {/* Модальное окно редактирования Типа устройства (с выбором свойств) */}
+      <Dialog
+        open={openTypeModal}
+        onClose={() => setOpenTypeModal(false)}
+        maxWidth="md"
+        fullWidth
+        sx={{
+          '& .MuiDialog-paper': {
+            maxHeight: '80vh',
+          }
+        }}
+      >
+        <DialogTitle>Редактировать тип устройства</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Название типа"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={editingTypeName}
+            onChange={(e) => setEditingTypeName(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+
+          <DialogContentText sx={{ mb: 1 }}>
+            Выберите свойства для этого типа устройства:
+          </DialogContentText>
+
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" gutterBottom>Доступные свойства</Typography>
+              <List dense sx={{ border: '1px solid #e0e0e0', borderRadius: 1, maxHeight: 300, overflowY: 'auto' }}>
+                {availableProperties
+                  .sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+                  .map(prop => (
+                    <ListItem key={prop.id} sx={{ py: 0.5 }}>
+                      <ListItemText primary={prop.name} />
+                      <IconButton
+                        color="success"
+                        edge="end"
+                        aria-label="add"
+                        onClick={() => {
+                          setTypeProperties([...typeProperties, prop.id]);
+                          setAvailableProperties(availableProperties.filter(p => p.id !== prop.id));
+                        }}
+                      >
+                        &rarr;
+                      </IconButton>
+                    </ListItem>
+                  ))}
+                {availableProperties.length === 0 && (
+                  <ListItem>
+                    <ListItemText primary="Нет доступных свойств" />
+                  </ListItem>
+                )}
+              </List>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" gutterBottom>Связанные свойства</Typography>
+              <List dense sx={{ border: '1px solid #e0e0e0', borderRadius: 1, maxHeight: 300, overflowY: 'auto' }}>
+                {typeProperties
+                  .map(propId => allProperties.find(p => p.id === propId))
+                  .filter(Boolean)
+                  .sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+                  .map(prop => (
+                    <ListItem key={prop.id} sx={{ py: 0.5 }}>
+                      <ListItemText primary={prop.name} />
+                      <IconButton
+                        color="error"
+                        edge="end"
+                        aria-label="remove"
+                        onClick={() => {
+                          setTypeProperties(typeProperties.filter(id => id !== prop.id));
+                          setAvailableProperties([...availableProperties, prop]);
+                        }}
+                      >
+                        &larr;
+                      </IconButton>
+                    </ListItem>
+                  ))}
+                {typeProperties.length === 0 && (
+                  <ListItem>
+                    <ListItemText primary="Нет связанных свойств" />
+                  </ListItem>
+                )}
+              </List>
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'space-between' }}>
+          <Button onClick={() => setOpenTypeModal(false)} variant="outlined" color="primary">Отмена</Button>
+          <Button onClick={handleUpdateType} variant="contained" color="success">Сохранить</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Модальное окно редактирования Статуса */}
+      <Dialog open={openStatusModal} onClose={() => setOpenStatusModal(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Редактировать статус</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Название статуса"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={editingStatusName}
+            onChange={(e) => setEditingStatusName(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'space-between' }}>
+          <Button onClick={() => setOpenStatusModal(false)} variant="outlined" color="primary">Отмена</Button>
+          <Button onClick={handleUpdateStatus} variant="contained" color="success">Сохранить</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Модальное окно редактирования Отдела */}
+      <Dialog open={openDepartmentModal} onClose={() => setOpenDepartmentModal(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Редактировать отдел</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Название отдела"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={editingDepartmentName}
+            onChange={(e) => setEditingDepartmentName(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'space-between' }}>
+          <Button onClick={() => setOpenDepartmentModal(false)} variant="outlined" color="primary">Отмена</Button>
+          <Button onClick={handleUpdateDepartment} variant="contained" color="success">Сохранить</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Список Типов устройств */}
+      {renderListSection({
+        listName: 'types',
+        title: 'Типы устройств',
+        items: types,
+        itemNameField: 'name',
+        newItemValue: newType,
+        setNewItemValue: setNewType,
+        handleAdd: handleAddType,
+        handleEdit: handleOpenEditType,
+        handleDelete: handleDeleteType,
+        placeholder: 'Введите тип устройства...'
+      })}
+
+      {/* Список Статусов */}
+      {renderListSection({
+        listName: 'statuses',
+        title: 'Статусы',
+        items: statuses,
+        itemNameField: 'name',
+        newItemValue: newStatus,
+        setNewItemValue: setNewStatus,
+        handleAdd: handleAddStatus,
+        handleEdit: handleOpenEditStatus,
+        handleDelete: handleDeleteStatus,
+        placeholder: 'Введите статус...'
+      })}
+
+      {/* Модальное окно редактирования Сотрудника */}
+      <Dialog open={openEmployeeModal} onClose={() => setOpenEmployeeModal(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Редактировать сотрудника</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="ФИО сотрудника"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={editingEmployee.name}
+            onChange={(e) => setEditingEmployee({ ...editingEmployee, name: e.target.value })}
+            sx={{ mb: 2 }}
+          />
+          <FormControl fullWidth variant="outlined">
+            <InputLabel id="edit-employee-dept-label">Отдел</InputLabel>
+            <Select
+              labelId="edit-employee-dept-label"
+              value={editingEmployee.department_id}
+              onChange={(e) => setEditingEmployee({ ...editingEmployee, department_id: e.target.value })}
+              label="Отдел"
+            >
+              {departments
+                .sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+                .map((dept) => (
+                  <MenuItem key={dept.id} value={dept.id}>
+                    {dept.name}
+                  </MenuItem>
+                ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'space-between' }}>
+          <Button onClick={() => setOpenEmployeeModal(false)} variant="outlined" color="primary">Отмена</Button>
+          <Button onClick={handleUpdateEmployee} variant="contained" color="success">Сохранить</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Модальное окно подтверждения удаления */}
+      <Dialog
+        open={deleteDialog.open}
+        onClose={handleCloseDeleteDialog}
+      >
+        <DialogTitle>{deleteDialog.title}</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {deleteDialog.content}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'space-between' }}>
+          <Button onClick={handleCloseDeleteDialog} color="primary" variant="outlined">Отмена</Button>
+          <Button onClick={handleConfirmDelete} color="error" variant="contained">
+            Удалить
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar для уведомлений */}
+      {/* Предполагается, что Snackbar компонент определен в App.js или выше по дереву.
+      Если нет, раскомментируйте ниже:
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        message={snackbar.message}
+        severity={snackbar.severity}
+      />
+      */}
     </Container>
   );
 };

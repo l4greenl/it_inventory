@@ -251,6 +251,21 @@ const AddNeed = ({ currentUser }) => {
                 onChange={handleChange}
                 label="Отдел (подразделение) *"
                 sx={isError('department_id') ? {'& .MuiOutlinedInput-notchedOutline': { borderColor: 'error.main' } } : {mb: -2}}
+                MenuProps={{
+                  anchorOrigin: {
+                    vertical: 'bottom',
+                    horizontal: 'left',
+                  },
+                  transformOrigin: {
+                    vertical: 'top',
+                    horizontal: 'left',
+                  },
+                  PaperProps: {
+                    style: {
+                      maxHeight: 260,
+                    },
+                  },
+                }}
               >
                 {departments.map((dept) => (
                   <MenuItem key={dept.id} value={dept.id}>
@@ -275,6 +290,21 @@ const AddNeed = ({ currentUser }) => {
                 onChange={handleChange}
                 label="Наименование потребности *"
                 sx={isError('asset_type_id') ? {'& .MuiOutlinedInput-notchedOutline': { borderColor: 'error.main' } } : {mb: -2}}
+                MenuProps={{
+                  anchorOrigin: {
+                    vertical: 'bottom',
+                    horizontal: 'left',
+                  },
+                  transformOrigin: {
+                    vertical: 'top',
+                    horizontal: 'left',
+                  },
+                  PaperProps: {
+                    style: {
+                      maxHeight: 260,
+                    },
+                  },
+                }}
               >
                 {types.map((type) => (
                   <MenuItem key={type.id} value={type.id}>

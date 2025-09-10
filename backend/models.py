@@ -113,6 +113,9 @@ class Asset(db.Model):
     OS = db.Column(db.String(100))
     IP_address = db.Column(db.String(45), nullable=True)
     number = db.Column(db.String(50))
+    username = db.Column(db.String(50))
+    add_serial_number = db.Column(db.String(50))
+
 
     department = db.relationship('Department', backref='assets')
     status = db.relationship('Status', backref='assets')
@@ -139,7 +142,9 @@ class Asset(db.Model):
             'Drive': self.Drive,
             'OS': self.OS,
             'IP_address': self.IP_address,
-            'number': self.number,
+            'username': self.username, # <<< НОВОЕ
+            'add_serial_number': self.add_serial_number, # <<< НОВОЕ
+            'number': self.number, # Убедитесь, что number тоже возвращается
             'category_name': self.type_obj.name if self.type_obj else None,
             'full_name': f"{self.type_obj.name if self.type_obj else 'Без типа'} {self.brand} {self.model}"
         }

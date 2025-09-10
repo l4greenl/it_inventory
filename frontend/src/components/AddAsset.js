@@ -129,6 +129,8 @@ const AddAsset = ({ currentUser }) => {
       'Диск': 'Drive',
       'IP-адрес': 'IP_address', // В JS удобнее работать с IP_address
       'Внутренний номер': 'number',
+      'Имя устройства': 'username',
+      'Доп. серийный номер': 'add_serial_number',
     };
     return mapping[propertyName] || propertyName.toLowerCase().replace(/\s+/g, '_');
   };
@@ -153,31 +155,10 @@ const AddAsset = ({ currentUser }) => {
     'diagonal': 'Например: 15,6"',
     'IP_address': 'Например: 192.168.1.100',
     'number': 'Например: 2129',
-  };  
- // ВНИМАНИЕ! Может эта функция лучше
-//  const handleResponsiblePersonChange = (e) => {
-//     const { value } = e.target;
-//     setAsset(prev => ({ ...prev, responsible_person: value }));
-//     setHasUnsavedChanges(true);
-    
-//     // <<< ДОБАВИЛ: Отмечаем поле как "touched"
-//     setTouched(prev => ({ ...prev, responsible_person: true }));
-    
-//     if (errors.responsible_person) {
-//       setErrors(prev => ({ ...prev, responsible_person: '' }));
-//     }
+    'username': 'Например: PATENT-02',
+    'add_serial_number': 'Например: EX583772630042024',
 
-//     // Автозаполнение отдела
-//     if (value) {
-//       const employee = employees.find(emp => emp.id === parseInt(value));
-//       if (employee && employee.department_id) {
-//         setAsset(prev => ({ ...prev, department_id: employee.department_id }));
-//         if (errors.department_id) {
-//           setErrors(prev => ({ ...prev, department_id: '' }));
-//         }
-//       }
-//     }
-//   };
+  };  
 
   const handleResponsiblePersonChange = (e) => {
     const employeeId = e.target.value;
@@ -455,6 +436,21 @@ const AddAsset = ({ currentUser }) => {
                 value={asset.type_id}
                 onChange={handleChange}
                 disabled={!currentUser || currentUser.role !== 'admin'}
+                MenuProps={{
+                  anchorOrigin: {
+                    vertical: 'bottom',
+                    horizontal: 'left',
+                  },
+                  transformOrigin: {
+                    vertical: 'top',
+                    horizontal: 'left',
+                  },
+                  PaperProps: {
+                    style: {
+                      maxHeight: 260,
+                    },
+                  },
+                }}
               >
                 {types.map((type) => (
                   <MenuItem key={type.id} value={type.id}>
@@ -516,6 +512,21 @@ const AddAsset = ({ currentUser }) => {
                 value={asset.status_id}
                 onChange={handleChange}
                 disabled={!currentUser || currentUser.role !== 'admin'}
+                MenuProps={{
+                  anchorOrigin: {
+                    vertical: 'bottom',
+                    horizontal: 'left',
+                  },
+                  transformOrigin: {
+                    vertical: 'top',
+                    horizontal: 'left',
+                  },
+                  PaperProps: {
+                    style: {
+                      maxHeight: 260,
+                    },
+                  },
+                }}
               >
                 {statuses.map((status) => (
                   <MenuItem key={status.id} value={status.id}>
@@ -536,6 +547,21 @@ const AddAsset = ({ currentUser }) => {
                 value={asset.actual_user || ''}
                 onChange={handleChange}
                 disabled={!currentUser || currentUser.role !== 'admin'}
+                MenuProps={{
+                  anchorOrigin: {
+                    vertical: 'bottom',
+                    horizontal: 'left',
+                  },
+                  transformOrigin: {
+                    vertical: 'top',
+                    horizontal: 'left',
+                  },
+                  PaperProps: {
+                    style: {
+                      maxHeight: 260,
+                    },
+                  },
+                }}
               >
                 {employees.map((emp) => (
                   <MenuItem key={`actual-${emp.id}`} value={emp.id}>
@@ -565,6 +591,21 @@ const AddAsset = ({ currentUser }) => {
                 value={asset.responsible_person}
                 onChange={handleResponsiblePersonChange}
                 disabled={!currentUser || currentUser.role !== 'admin'}
+                MenuProps={{
+                  anchorOrigin: {
+                    vertical: 'bottom',
+                    horizontal: 'left',
+                  },
+                  transformOrigin: {
+                    vertical: 'top',
+                    horizontal: 'left',
+                  },
+                  PaperProps: {
+                    style: {
+                      maxHeight: 260,
+                    },
+                  },
+                }}
               >
                 {employees.map((emp) => (
                   <MenuItem key={emp.id} value={emp.id}>
@@ -598,6 +639,21 @@ const AddAsset = ({ currentUser }) => {
                   mb: 0,
                   '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0, 0, 0, 0.23)' },
                   '& .MuiSelect-select': { color: 'rgba(0, 0, 0, 0.87)' }
+                }}
+                MenuProps={{
+                  anchorOrigin: {
+                    vertical: 'bottom',
+                    horizontal: 'left',
+                  },
+                  transformOrigin: {
+                    vertical: 'top',
+                    horizontal: 'left',
+                  },
+                  PaperProps: {
+                    style: {
+                      maxHeight: 260,
+                    },
+                  },
                 }}
               >
                 {departments.map((dept) => (
